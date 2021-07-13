@@ -1,3 +1,5 @@
+import { log, LogType } from "../utilities/log";
+
 interface Paste {
   id: string;
 }
@@ -10,13 +12,19 @@ export const url = function (paste: Paste): string {
 
 export const create_paste = async function (
     text: string
-  ): Promise<Paste> {
+  ): Promise<Paste | null> {
     let paste = require("paste.ee") as (
       data: string,
       token: string
     ) => Promise<{ id: string }>;
-    let posted = await paste(text, PASTE_API_TOKEN);
-    
-    return posted;
+    try {
+      const posted = await paste(text, PASTE_API_TOKEN);
+      return posted;
+    }
+    catch (err) {
+      log("Unexpected error while creating paste:", LogType.Error);
+      log(err, LogType.Error)
+      return null;
+    }
   };
   
