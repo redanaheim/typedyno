@@ -20,14 +20,14 @@ export const process_message = async function (
   // Only use this area for non-command responses
   // such as replying to DMs.
 
-  const is_command = process_message_for_commands(message, client);
+  const is_command = process_message_for_commands(message, client, pool);
 
   // Process other information here like DMs, or mentions.
   // (Don't react to the mention if it's part of a command)
   if (message.mentions.users.has(BOT_USER_ID) && is_command === false) {
-    if (message.guild !== null) {
-      const prefix = await get_prefix(message.guild, pool);
-      // If the channel isn't a DM
+    const prefix = await get_prefix(message.guild, pool);
+    if (prefix !== GLOBAL_PREFIX) {
+      // If we have a specific prefix
       message.channel.send(
         `Hi! I'm TigerDyno, a WIP bot developed by TigerGold59#8729. Use ${prefix}info (on this server, global prefix is ${GLOBAL_PREFIX}) for a more complete description.`
       );
