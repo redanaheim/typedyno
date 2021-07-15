@@ -16,6 +16,7 @@ export const CONFIG = require("../src/config.json") as Config;
 export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN;
 export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX;
 export const BOT_USER_ID = "864326626111913995";
+export const STOCK_TABLES = ["prefixes", "users"]
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
