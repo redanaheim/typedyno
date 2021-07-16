@@ -1,5 +1,5 @@
 import { GLOBAL_PREFIX } from "./main"
-import { is_string } from "./utilities/typeutils"
+import { escape_reg_exp, is_string } from "./utilities/typeutils"
 
 /**
  * An interface which describes an argument a command or subcommand takes.
@@ -155,7 +155,7 @@ xofakind:
 export const keying_off_regex = function(argument_number: number): RegExp {
     const argument_identifier = "$" + Math.floor(argument_number).toString()
 
-    return new RegExp(`\\{opt\\s*\\$${argument_identifier}\\}\\s*\\[(.+?)\\]`, 'gi');
+    return new RegExp(`\\{opt\\s*\\$${escape_reg_exp(argument_identifier)}\\}\\s*\\[(.+?)\\]`, 'gi');
 }
 
 export const argument_identifier = function(argument_number: number): string {

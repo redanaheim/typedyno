@@ -22,7 +22,9 @@ export const is_valid_Snowflake = function(thing?: any): boolean {
 
 export enum InclusionSpecifierType {
     Whitelist = "Whitelist",
-    Blacklist = "Blacklist"
+    Blacklist = "Blacklist",
+    DeferringWhitelist = "DeferringWhitelist",
+    DeferringBlacklist = "DeferringBlacklist"
 }
 
 export interface InclusionSpecifier {
@@ -40,7 +42,7 @@ export const is_valid_InclusionSpecifier = function(thing?: any): boolean {
     if (!thing) {
         return false
     }
-    else if (thing.type !== InclusionSpecifierType.Blacklist && thing.type !== InclusionSpecifierType.Whitelist) {
+    else if (thing.type !== InclusionSpecifierType.Blacklist && thing.type !== InclusionSpecifierType.Whitelist && thing.type !== InclusionSpecifierType.DeferringWhitelist && thing.type !== InclusionSpecifierType.DeferringBlacklist) {
         return false
     }
     else if (Array.isArray(thing.list) === false) {
@@ -73,12 +75,20 @@ export const is_valid_Permissions = function(thing?: any): boolean {
     return true;
 }
 
-export const allowed_under = function(snowflake?: Snowflake, specifier?: InclusionSpecifier): boolean {
-    if (!snowflake) {
-        return false;
+export enum TentativePermissionType {
+    AllowedIfLowerLevelWhitelisted,
+    AllowedThroughWhitelistIfLowerLevelAllowed, // indicates to allowed() function that a whitelist is the reason this is allowed. this allows
+    // it to override the DeferringBlacklist and DeferringWhitelist AllowedIfLowerLevelWhitelisted result
+    AllowedIfLowerLevelAllowed,
+    NotAllowed
+}
+
+export const allowed_under = function(snowflake?: Snowflake, specifier?: InclusionSpecifier): TentativePermissionType {
+    if (!snowflake || is_valid_Snowflake(snowflake) === false) {
+        return TentativePermissionType.NotAllowed
     }
-    if (!specifier) {
-        return false;
+    if (!specifier || is_valid_InclusionSpecifier(specifier) === false) {
+        return TentativePermissionType.AllowedIfLowerLevelAllowed
     }
 
     let list = specifier.list.map(el => to_string(el));
@@ -86,36 +96,100 @@ export const allowed_under = function(snowflake?: Snowflake, specifier?: Inclusi
     switch (specifier.type) {
         case InclusionSpecifierType.Blacklist:
             if (list.includes(string_snowflake)) {
-                return false;
+                return TentativePermissionType.NotAllowed
             }
             else {
-                return true;
+                return TentativePermissionType.AllowedIfLowerLevelAllowed
             }
         case InclusionSpecifierType.Whitelist:
             if (list.includes(string_snowflake)) {
-                return true;
+                return TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed
             }
             else {
-                return false;
+                return TentativePermissionType.NotAllowed
+            }
+        case InclusionSpecifierType.DeferringBlacklist:
+            if (list.includes(string_snowflake)) {
+                return TentativePermissionType.AllowedIfLowerLevelWhitelisted
+            }
+            else {
+                return TentativePermissionType.AllowedIfLowerLevelAllowed
+            }
+        case InclusionSpecifierType.DeferringWhitelist:
+            if (list.includes(string_snowflake)) {
+                return TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed
+            }
+            else {
+                return TentativePermissionType.AllowedIfLowerLevelWhitelisted
             }
     }
 }
 
 export const allowed = function(message: Message, permissions: Permissions): boolean {
-    if (allowed_under(message.guild.id, permissions.servers)) {
-        if (allowed_under(message.channel.id, permissions.channels)) {
-            if (allowed_under(message.author.id, permissions.users)) {
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-        else {
+
+    switch (allowed_under(message.guild.id, permissions.servers)) { // Server level
+        case TentativePermissionType.NotAllowed: // Never allowed
             return false;
-        }
+        case TentativePermissionType.AllowedIfLowerLevelAllowed: // Check lower levels for passive allowance
+        case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+            switch (allowed_under(message.channel.id, permissions.channels)) { // Channel level
+                case TentativePermissionType.NotAllowed: // Never allowed
+                    return false;
+                case TentativePermissionType.AllowedIfLowerLevelAllowed: // Check lower levels for passive allowance
+                case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                    switch (allowed_under(message.author.id, permissions.users)) { // User level
+                        case TentativePermissionType.NotAllowed:
+                            return false;
+                        case TentativePermissionType.AllowedIfLowerLevelAllowed:
+                        case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                        case TentativePermissionType.AllowedIfLowerLevelWhitelisted:
+                            return true;
+                    }
+                case TentativePermissionType.AllowedIfLowerLevelWhitelisted: // Check lower levels for whitelist allowance
+                    switch (allowed_under(message.author.id, permissions.users)) { // User level
+                        case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                            return true;
+                        case TentativePermissionType.AllowedIfLowerLevelAllowed:
+                        case TentativePermissionType.AllowedIfLowerLevelWhitelisted:
+                        case TentativePermissionType.NotAllowed:
+                            return false;
+                    }
+            }
+        case TentativePermissionType.AllowedIfLowerLevelWhitelisted: // Check lower levels for whitelisted allowance
+            switch (allowed_under(message.channel.id, permissions.channels)) { // Channel level
+                case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                    switch (allowed_under(message.author.id, permissions.users)) { // User level
+                        case TentativePermissionType.AllowedIfLowerLevelAllowed:
+                        case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                            return true;
+                        case TentativePermissionType.AllowedIfLowerLevelWhitelisted:
+                        case TentativePermissionType.NotAllowed:
+                            return false;
+                    }
+                case TentativePermissionType.AllowedIfLowerLevelWhitelisted:
+                    switch (allowed_under(message.author.id, permissions.users)) { // User level
+                        case TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed:
+                            return true;
+                        case TentativePermissionType.AllowedIfLowerLevelAllowed:
+                        case TentativePermissionType.AllowedIfLowerLevelWhitelisted:
+                        case TentativePermissionType.NotAllowed:
+                            return false;
+                    }
+                case TentativePermissionType.AllowedIfLowerLevelAllowed: // Not sufficient. Channel must be whitelisted
+                case TentativePermissionType.NotAllowed:
+                    return false;
+            }
     }
-    else {
-        return false;
-    }
+}
+
+/**
+ * This function checks if two commands with the given permissions could both be used in the same channel by the same user.
+ * This is useful to determine whether a function name overlap should be allowed or whether it is okay, because
+ * one would always be restricted anyway. Argument order doesn't matter.
+ * @param permissions_one A permissions object for one command
+ * @param permissions_two A permissions object for the other command
+ * @returns Boolean indicating whether the permissions object have overlap.
+ */
+export const overlap = function(permissions_one: Permissions, permission_two: Permissions)/*: boolean */{
+    // TODO: Implement ANY way of doing this
 }
