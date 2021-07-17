@@ -24,6 +24,8 @@ export interface Module {
     servers_are_universes: boolean,
     // The permissions indicate whether a user is allowed to use a command from the module in a specific channel.
     permissions: Permissions,
+    // Indicates whether to hide this module from the command manual when its permissions aren't met
+    hide_when_contradicts_permissions: boolean,
     // The command manual objects which will be added to %commands results on available servers.
     // They describe how to use a command.
     functions: ModuleCommand[]
@@ -36,7 +38,7 @@ export interface Module {
  */
 export const load_module = function(name: string): Module | false {
 
-    const module_export = require(`../src/modules/${name}/index.js`) // running from /out/
+    const module_export: Partial<Module> = require(`../src/modules/${name}/index.js`) // running from /out/
 
     if (!module_export) {
         return false
@@ -53,17 +55,20 @@ export const load_module = function(name: string): Module | false {
     else if (is_valid_Permissions(module_export) === false) {
         return false
     }
+    else if (module_export.hide_when_contradicts_permissions !== false && module_export.hide_when_contradicts_permissions !== true) {
+        return false
+    }
     else if (Array.isArray(module_export.functions) === false) {
         return false
     }
 
-    for (const thing in module_export.tables) {
+    for (const thing of module_export.tables) {
         if (is_string(thing) === false) {
             return false
         }
     }
 
-    for (const thing in module_export.functions) {
+    for (const thing of module_export.functions) {
         if (is_valid_BotCommand(thing) === false) {
             return false
         }

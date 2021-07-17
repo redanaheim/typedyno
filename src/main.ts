@@ -3,13 +3,14 @@ import { Snowflake } from "./utilities/permissions";
 import * as Discord from "discord.js";
 import { process_message } from "./message";
 import { Pool } from "pg";
+import { load_modules } from "./module_loader";
 
 export interface Config {
     admins: [Snowflake];
     use: [string],
     event_listeners: [string],
     presence_data?: Discord.PresenceData,
-    [key: string]: any
+    [key: string]: unknown
 }
 
 export const CONFIG = require("../src/config.json") as Config;
@@ -17,6 +18,11 @@ export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN;
 export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX;
 export const BOT_USER_ID = "864326626111913995";
 export const STOCK_TABLES = ["prefixes", "users"]
+export const MAINTAINER_TAG = "TigerGold59#8729"
+
+log("Loading modules...", LogType.Status)
+export const MODULES = load_modules()
+log("Module loading complete.", LogType.Success)
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
