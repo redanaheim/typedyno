@@ -21,7 +21,7 @@ const is_valid_CommandArgument = function(thing?: Partial<CommandArgument>): thi
     if (!thing) {
         return false
     }
-    else if (is_string(thing) === false) {
+    else if (is_string(thing.name) === false) {
         return false
     }
     else if (thing.optional !== true && thing.optional !== false) {
@@ -56,23 +56,29 @@ export type SimpleCommandManual = SubcommandManual
 
 const is_valid_SimpleCommandManual = function(thing?: Partial<SimpleCommandManual>): thing is SimpleCommandManual {
     if (!thing) {
+        // log(`is_valid_SimpleCommandManual returned false - thing was null, undefined, and empty string, or another falsy object`, LogType.Mismatch)
         return false
     }
     else if (is_string(thing.name) === false) {
+        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "name"`, LogType.Mismatch)
         return false
     }
     else if (is_string(thing.syntax) === false) {
+        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "syntax"`, LogType.Mismatch)
         return false
     }
     else if (!thing.arguments || Array.isArray(thing.arguments) === false) {
+        // log(`is_valid_SimpleCommandManual returned false - thing had no array property "arguments"`, LogType.Mismatch)
         return false
     }
     else if (is_string(thing.description) === false) {
+        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "description"`, LogType.Mismatch)
         return false
     }
     
     for (const element of thing.arguments) {
         if (is_valid_CommandArgument(element) === false) {
+            // log(`is_valid_SimpleCommandManual returned false - thing had non-command-argument item "${JSON.stringify(element)}" in thing.arguments`, LogType.Mismatch)
             return false
         }
     }
@@ -158,26 +164,32 @@ xofakind:
     Description: Simulates rolling the given number of dice until they all come up the same.
 */
 
-export const keying_off_regex = function(argument_number: number): RegExp {
-    const argument_identifier = "$" + Math.floor(argument_number).toString()
-
-    return new RegExp(`\\{opt\\s*\\$${escape_reg_exp(argument_identifier)}\\}\\s*\\[(.+?)\\]`, 'gi');
-}
-
 export const argument_identifier = function(argument_number: number): string {
-    return ("$" + Math.floor(argument_number).toString())
+    return ("$" + Math.floor(argument_number + 1).toString())
 }
 
-export const key_off = function(syntax_string: string, argument_number: number, provided: boolean): string {
-    const regex = keying_off_regex(argument_number);
+export const keying_off_regex = function(argument_number: number): RegExp {
+
+    return new RegExp(`\\{opt\\s*${escape_reg_exp(argument_identifier(argument_number))}\\}\\s*\\[(.+?)\\]`, 'gi');
+}
+
+export const key_off = function(syntax_string: string, argument_index: number, provided: boolean): string {
+    const regex = keying_off_regex(argument_index);
+    // log(`key_off created regex ${regex.source} for syntax string "${syntax_string}" and argument index ${argument_index.toString()} (provided: ${provided ? "true" : "false"}).`)
     if (provided === false) {
         return syntax_string.replace(regex, "")
     }
     else {
         const matches = syntax_string.matchAll(regex)
 
+        // log(`Found matches for keying_off_regex.`)
+
+        const matches_arr = [...matches]
+        // log(`matches_arr: ${JSON.stringify(matches_arr)}`)
+
         // Replace each match with the content in the braces
-        for (const match of matches) {
+        for (const match of matches_arr) {
+            // log(`Match: ${match[0]}, replacement: ${match[1]}`)
             syntax_string = syntax_string.replace(match[0], match[1])
         }
         
@@ -231,7 +243,8 @@ export const generate_syntaxes = function(command_arguments: CommandArgument[], 
 
         // Replace the parts that key off of whether the optional argument is provided, using the state
         for (let i = 0; i < optional_arguments.length; i++) {
-            state_dependent_syntax = key_off(state_dependent_syntax, i, state[i])
+            let argument_index = command_arguments.map(argument => argument.name).indexOf(optional_arguments[i].name)
+            state_dependent_syntax = key_off(state_dependent_syntax, argument_index, state[i])
         }
         
         // Replace the argument numbers with their descriptions
@@ -240,10 +253,22 @@ export const generate_syntaxes = function(command_arguments: CommandArgument[], 
         }
 
         // Replace the prefix preholder
-        state_dependent_syntax.replace("<prefix>", prefix_substitution)
+        state_dependent_syntax = state_dependent_syntax.replace("<prefix>", prefix_substitution)
 
         syntaxes.push(state_dependent_syntax)
     }
+
+    // Do one more iteration for when all are true or there are no optional arguments
+    let state_dependent_syntax = syntax_string;
+    for (let i = 0; i < optional_arguments.length; i++) {
+        let argument_index = command_arguments.map(argument => argument.name).indexOf(optional_arguments[i].name)
+        state_dependent_syntax = key_off(state_dependent_syntax, argument_index, state[i])
+    }
+    for (let i = 0; i < command_arguments.length; i++) {
+        state_dependent_syntax = state_dependent_syntax.replace(argument_identifier(i), `<${command_arguments[i].name}>`);
+    }
+    state_dependent_syntax = state_dependent_syntax.replace("<prefix>", prefix_substitution)
+    syntaxes.push(state_dependent_syntax)
 
     return syntaxes;
 }
@@ -253,15 +278,15 @@ export const INDENT = "    ";
 export const make_simple_command_manual = function(manual: SimpleCommandManual, prefix_substitution: string): string {
     let syntaxes = generate_syntaxes(manual.arguments, manual.syntax, prefix_substitution);
 
-    const syntax_accumulation = syntaxes.map((syntax, index) => {
-        return `${indent}${(index + 1).toString()}. ${syntax}`
-    }).join("\n")
+    const syntax_accumulation = indent(syntaxes.map((syntax, index) => {
+        return `${(index + 1).toString()}. ${syntax}`
+    }).join("\n"))
 
-    return manual.name + ":\n" + syntax_accumulation + "\n" + indent + "Description: " + manual.description 
+    return manual.name + ":\n" + syntax_accumulation + "\n" + indent("Description: " + manual.description )
 }
 
 export const indent = function(str: string): string {
-    return str.split("\n").map(line => `${indent}${line}`).join("\n")
+    return str.split("\n").map(line => `${INDENT}${line}`).join("\n")
 }
 
 export const create_manual_entry = function(command_manual: CommandManual, prefix_substitution = GLOBAL_PREFIX): string | false {
@@ -277,8 +302,8 @@ export const create_manual_entry = function(command_manual: CommandManual, prefi
         let manual = command_manual as MultifacetedCommandManual
         const subcommand_list = `${manual.name} <${manual.subcommands.map(subcommand => subcommand.name).join("/")}>\n`
         let accumulator = subcommand_list;
-        accumulator += manual.subcommands.map(subcommand => indent(make_simple_command_manual(subcommand, prefix_substitution))).join("\n") + "\n";
-        accumulator += `${indent}Description: ${manual.description}`
+        accumulator += indent(`Description: ${manual.description}`) + "\n\n"
+        accumulator += indent(manual.subcommands.map(subcommand => make_simple_command_manual(subcommand, prefix_substitution)).join("\n"));
 
         return accumulator;
     }
@@ -353,6 +378,6 @@ export const make_manual = async function(message: Message, prefix_substitution:
 
     const full_manual = manual_section_accumulator.join("\n\n\n");
 
-    return await create_paste(`TypeDyno Command Manual\n==========================Local Prefix - ${prefix_substitution}\nNote: The prefix shown in this manual is only for this server.\nThe global prefix is ${GLOBAL_PREFIX}, but this may be overridden by individual servers.\n\n\n` + full_manual);
+    return await create_paste(`TypeDyno Command Manual\n=======================\nLocal Prefix - ${prefix_substitution}\nNote: The prefix shown in this manual is only for this server.\nThe global prefix is ${GLOBAL_PREFIX}, but this may be overridden by individual servers.\n\n\n` + full_manual);
 
 }

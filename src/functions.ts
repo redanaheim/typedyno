@@ -9,11 +9,16 @@ import { allowed, InclusionSpecifierType, is_valid_Permissions, Permissions } fr
 import { escape_reg_exp, is_string } from "./utilities/typeutils";
 import { url } from "./integrations/paste_ee";
 
-export enum BotCommandProcessResults {
+export enum BotCommandProcessResultType {
     DidNotSucceed,
     Succeeded,
     Unauthorized,
     Invalid
+}
+
+export interface BotCommandProcessResults {
+    type: BotCommandProcessResultType;
+    not_authorized_message?: string;
 }
 
 export const confirm = async function(message: Message): Promise<boolean> {
@@ -84,10 +89,10 @@ export const make_command_regex = function(command_name: string, prefix: string)
     }
 
     if (use_global_prefix === false) {
-        return new RegExp(`^${escape_reg_exp(prefix)}\s*${escape_reg_exp(command_name)} `, "i")
+        return new RegExp(`^${escape_reg_exp(prefix)}\\s*${escape_reg_exp(command_name)}`, "i")
     }
     else {
-        return new RegExp(`^${escape_reg_exp(GLOBAL_PREFIX)}\s*${escape_reg_exp(command_name)} `, "i")
+        return new RegExp(`^${escape_reg_exp(GLOBAL_PREFIX)}\\s*${escape_reg_exp(command_name)}`, "i")
     }
 }
 
@@ -99,6 +104,7 @@ export interface ParseMessageResult {
     command_name?: string;
     did_use_module: boolean;
     module_name?: string;
+    not_authorized_reason?: string;
 }
 
 /**
@@ -117,11 +123,22 @@ export const process_message_for_commands = async function(message: Message, cli
     // hope that would've been caught earlier.
     for (const bot_command of STOCK_BOT_COMMANDS) {
         const regex = make_command_regex(bot_command.command_manual.name, prefix);
+        
+        /*
+        if (regex instanceof RegExp) {
+            log(`Made regex ${regex.source} to test for command "${bot_command.command_manual.name}"...`, LogType.Status)
+            log(`Checking message ${message.content}...`, LogType.Status)
+        }
+        */
+
         if (regex instanceof RegExp && regex.test(message.content) && valid_command === null) {
+            // log(`Regex match found!`, LogType.Status)
             if (allowed(message, bot_command.permissions)) {
+                // log(`Match is valid, permissions are a go.`, LogType.Success)
                 valid_command = bot_command;
             }
             else if (bot_command.hide_when_contradicts_permissions === false) {
+                // log(`Match is not valid, permissions are restrictive.`)
                 return {
                     did_find_command: true,
                     command_authorized: false,
@@ -151,7 +168,7 @@ export const process_message_for_commands = async function(message: Message, cli
                             command_authorized: false,
                             command_name: bot_command.command_manual.name,
                             did_use_module: true,
-                            module_name: module.name
+                            module_name: module.name,
                         }
                     }
                 }
@@ -168,12 +185,13 @@ export const process_message_for_commands = async function(message: Message, cli
 
         return {
             did_find_command: true,
-            command_worked: result === BotCommandProcessResults.Succeeded,
-            command_authorized: result !== BotCommandProcessResults.Unauthorized,
+            command_worked: result.type === BotCommandProcessResultType.Succeeded,
+            command_authorized: result.type !== BotCommandProcessResultType.Unauthorized,
             call_to_return_span_ms: end_time - start_time,
             command_name: valid_command.command_manual.name,
             did_use_module: using_module !== null,
-            module_name: using_module
+            module_name: using_module,
+            not_authorized_reason: result.not_authorized_message
         };
     }
     else {
@@ -201,11 +219,11 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
 
             if (is_string(paste.error)) {
                 message.channel.send(`paste.ee API failed to create paste: contact ${MAINTAINER_TAG} for help fixing this error.`)
-                return BotCommandProcessResults.DidNotSucceed
+                return {type: BotCommandProcessResultType.DidNotSucceed}
             }
             else if (is_string(paste.paste?.id)) {
                 message.channel.send(`You can find the command manual here: ${url(paste.paste)}. Note that certain commands may be hidden if you lack permission to use them.`)
-                return BotCommandProcessResults.Succeeded
+                return {type: BotCommandProcessResultType.Succeeded}
             }
 
         }
@@ -220,9 +238,13 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                         {
                             name: "string or symbol",
                             optional: false
+                        },
+                        {
+                            name: "server ID",
+                            optional: true
                         }
                     ],
-                    description: "Sets the provided string as the local prefix, overriding the global prefix. You must be a bot admin or designated server manager to use this command.",
+                    description: "Sets the provided string as the local prefix, overriding the global prefix.\nYou must be a bot admin or designated server manager to use this command.",
                     syntax: "<prefix>prefix set $1"
                 },
                 {
@@ -232,22 +254,27 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                     syntax: "<prefix>prefix get"
                 }
             ],
-            description: "Manage or get the prefix for your current server."
+            description: "Manage or get the prefix for your current server.",
         },
         hide_when_contradicts_permissions: false,
         process: async (message: Message, client: Client, pool: Pool, prefix: string): Promise<BotCommandProcessResults> => {
-            const process_cmd_regex = new RegExp(`^${escape_reg_exp(prefix)}\s*prefix (?<sub>\w+)(?:\s{1,}(?<post>.+?)\s*)?$`, "i")
+            const process_cmd_regex = new RegExp(`^${escape_reg_exp(prefix)}\\s*prefix (?<sub>\\w+)(?:\\s{1,}(?<post>.+?)\\s*)?$`, "i")
 
             const match = message.content.match(process_cmd_regex);
 
             if (match === null || !match.groups) {
-                return BotCommandProcessResults.Invalid;
+                return {type: BotCommandProcessResultType.Invalid};
             }
             else {
                 switch(match.groups["sub"]) {
                     case "get": {
                         const prefix_result = await get_prefix(message.guild, pool)
-                        message.channel.send(`The local prefix is "${prefix_result}", but you already knew that.`)
+                        if (prefix_result.trim() === GLOBAL_PREFIX.trim()) {
+                            message.channel.send(`The global prefix is "${prefix_result}" and it hasn't been changed locally, but you already knew that.`)
+                        }
+                        else {
+                            message.channel.send(`The local prefix is "${prefix_result}", but you already knew that.`)
+                        }
                     }
                     case "set": {
                         if (is_string(match.groups["post"])) {
@@ -257,34 +284,57 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                                 if (result.did_succeed) {
                                     const confirmed = await confirm(message);
                                     if (confirmed === true) {
-                                        return BotCommandProcessResults.Succeeded
+                                        return {type: BotCommandProcessResultType.Succeeded}
                                     }
                                     else {
-                                        return BotCommandProcessResults.DidNotSucceed
+                                        return {type: BotCommandProcessResultType.DidNotSucceed}
                                     }
                                 }
                                 else {
                                     if (result.result === SetPrefixNonStringResult.LocalPrefixArgumentSameAsGlobalPrefix) {
                                         message.channel.send("Setting a local prefix the same as the global prefix is not allowed for flexibility reasons. However, since the prefix you wanted to set was already the prefix, you can use it just like you would if this command had worked.")
-                                        return BotCommandProcessResults.Succeeded
+                                        return {type: BotCommandProcessResultType.Succeeded}
                                     }
                                     else {
                                         message.channel.send(`set_prefix failed: contact ${MAINTAINER_TAG} for help fixing this error.`)
                                         log(`set_prefix unexpectedly threw an error:`, LogType.Error)
                                         log(result.result as string, LogType.Error)
-                                        return BotCommandProcessResults.DidNotSucceed
+                                        return {type: BotCommandProcessResultType.DidNotSucceed}
                                     }
                                 }
                             }
                             else {
-                                return BotCommandProcessResults.Unauthorized
+                                return {type: BotCommandProcessResultType.Unauthorized, not_authorized_message: "You must be a bot admin or otherwise authorized person to set a server prefix."}
                             }
                         }
                     }
                     default: {
-                        return BotCommandProcessResults.Invalid
+                        return {type: BotCommandProcessResultType.Invalid}
                     }
                 }
+            }
+        }
+    },
+    {
+        command_manual: {
+            name: "info",
+            arguments: [],
+            syntax: "<prefix>info",
+            description: "Provides a description of useful commands and the design of the bot."
+        },
+        hide_when_contradicts_permissions: false,
+        process: async (message: Message, client: Client, pool: Pool, prefix: string): Promise<BotCommandProcessResults> => {
+            let base_info = `**Useful commands**:\n${prefix}commands: Lists the commands this bot has.\n**GitHub**: https://github.com/TigerGold59/typedyno`
+            if (prefix === GLOBAL_PREFIX) {
+                base_info += `\nThe prefix on this server is the same as the global prefix, ${GLOBAL_PREFIX}.`
+            }
+            else {
+                base_info += `\nThe global prefix, which applies to servers that haven't set a local prefix, is ${GLOBAL_PREFIX}.`
+            }
+
+            message.channel.send(base_info)
+            return {
+                type: BotCommandProcessResultType.Succeeded
             }
         }
     }
