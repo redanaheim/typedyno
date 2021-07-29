@@ -1,21 +1,30 @@
 import { Message } from "discord.js";
-import { is_number, is_string, to_string } from "./typeutils";
+import { is_number, is_string } from "./typeutils";
 
-export type Snowflake = string | number
+export type Snowflake = string
 
 export const is_valid_Snowflake = function(thing?: unknown): boolean { // does not return thing is Snowflake because
-    // some types that are valid snowflakes don't return true (i.e. 0.5)
+    // some types that are valid Snowflakes don't return true (i.e. 0.5)
     if (is_string(thing) === false && is_number(thing) === false) {
         return false
     }
     else if (is_string(thing)) {
-        return /^\d+$/.test(thing as string)
+        return /^\d{1,22}$/.test(thing)
     }
     else if (is_number(thing)) {
-        return /^\d+$/.test((thing as number).toString())
+        return /^\d{1,22}$/.test(thing.toString())
     }
 
     return false
+}
+
+export const Snowflake_to_BigInt = function(thing: Snowflake): number {
+    if (is_string(thing)) {
+        return Math.round(Number(thing));
+    }
+    else {
+        return Math.round(thing);
+    }
 }
 
 export enum InclusionSpecifierType {
@@ -89,32 +98,31 @@ export const allowed_under = function(snowflake?: Snowflake, specifier?: Inclusi
         return TentativePermissionType.AllowedIfLowerLevelAllowed
     }
 
-    let list = specifier.list.map(el => to_string(el));
-    let string_snowflake = to_string(snowflake)
+    let list = specifier.list;
     switch (specifier.type) {
         case InclusionSpecifierType.Blacklist:
-            if (list.includes(string_snowflake)) {
+            if (list.includes(snowflake)) {
                 return TentativePermissionType.NotAllowed
             }
             else {
                 return TentativePermissionType.AllowedIfLowerLevelAllowed
             }
         case InclusionSpecifierType.Whitelist:
-            if (list.includes(string_snowflake)) {
+            if (list.includes(snowflake)) {
                 return TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed
             }
             else {
                 return TentativePermissionType.NotAllowed
             }
         case InclusionSpecifierType.DeferringBlacklist:
-            if (list.includes(string_snowflake)) {
+            if (list.includes(snowflake)) {
                 return TentativePermissionType.AllowedIfLowerLevelWhitelisted
             }
             else {
                 return TentativePermissionType.AllowedIfLowerLevelAllowed
             }
         case InclusionSpecifierType.DeferringWhitelist:
-            if (list.includes(string_snowflake)) {
+            if (list.includes(snowflake)) {
                 return TentativePermissionType.AllowedThroughWhitelistIfLowerLevelAllowed
             }
             else {
@@ -129,7 +137,7 @@ export const allowed = function(message: Message, permissions: Permissions): boo
         return true;
     }
 
-    switch (allowed_under(message.guild.id, permissions.servers)) { // Server level
+    switch (allowed_under(message.guild?.id, permissions.servers)) { // Server level
         case TentativePermissionType.NotAllowed: // Never allowed
             return false;
         case TentativePermissionType.AllowedIfLowerLevelAllowed: // Check lower levels for passive allowance

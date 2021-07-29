@@ -45,7 +45,7 @@ export async function get_prefix_entry(server: Guild, query_device: Pool | PoolC
     // Otherwise, get it and update the cache
     else {
         // log(`get_prefix_entry: executing GET_SERVER_LISTING query...`)
-        const prefixes = await query_device.query(GET_SERVER_LISTING, [server.id])
+        const prefixes = await query_device.query(GET_SERVER_LISTING, [Number(server.id)])
         // No entry for the server ID
         if (prefixes.rowCount === 0) {
             // Update the cache
@@ -142,7 +142,7 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
             did_succeed: false
         }
     }
-    else if (is_string(prefix) === false) {
+    else if (is_string(prefix) === false || prefix.length > 10 || prefix.length < 1) {
         return {
             result: SetPrefixNonStringResult.InvalidPrefixArgument,
             did_succeed: false
@@ -181,7 +181,7 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
     if (local_prefix_entry === NoLocalPrefixEntryReason.NoDatabaseEntry && prefix !== GLOBAL_PREFIX) {
         try {
             // log(`set_prefix: executing CREATE_SERVER_LISTING query...`)
-            await pool.query(CREATE_SERVER_LISTING, [server.id, prefix]);
+            await pool.query(CREATE_SERVER_LISTING, [Number(server.id), prefix]);
             // Update prefix cache
             prefix_cache[server.id] = prefix;
         }
@@ -215,7 +215,7 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
     else if (is_string(local_prefix_entry) && prefix !== GLOBAL_PREFIX) {
         try {
             // log(`set_prefix: executing ALTER_SERVER_LISTING query...`)
-            await pool.query(ALTER_SERVER_LISTING, [prefix, server.id])
+            await pool.query(ALTER_SERVER_LISTING, [prefix, Number(server.id)])
             // Update prefix cache
             prefix_cache[server.id] = prefix;
         }

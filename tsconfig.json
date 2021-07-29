@@ -7,8 +7,13 @@
         "preserveConstEnums": true,
         "outDir": "out",
         "alwaysStrict": true,
+        "strict": true,
         "lib": ["ES2020"],
-        "downlevelIteration": true
+        "downlevelIteration": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "target": "ES2021"
     },
     "include": [
         "src/**/*"
