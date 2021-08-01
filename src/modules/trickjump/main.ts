@@ -1,6 +1,7 @@
 import { Module } from "../../module_loader";
 import { InclusionSpecifierType } from "../../utilities/permissions";
 
+// Main module export object
 const trickjump_module: Module = {
     name: "trickjump",
     servers_are_universes: true,

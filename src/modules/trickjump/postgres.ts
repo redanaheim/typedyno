@@ -1,161 +1,45 @@
-import { BinaryLike, createHash } from "node:crypto";
 import { Pool, PoolClient } from "pg";
 import { log, LogType } from "../../utilities/log";
-import { Parameter, ParamValueType, require_properties } from "../../utilities/parameter_validation";
-import { is_valid_Snowflake, Snowflake } from "../../utilities/permissions";
-import { is_number, is_string } from "../../utilities/typeutils";
+import { Snowflake } from "../../utilities/permissions";
+import { check_specification } from "../../utilities/runtime_typeguard";
+import { safe_serialize } from "../../utilities/typeutils";
+import {
+    check_jumprole_handle,
+    compute_jumprole_hash,
+    Jumprole,
+    JumproleHandle,
+    JumproleHandleType,
+    PartialJumproleSPECIFICATION,
+    PGJumprole_to_Jumprole,
+} from "./jumprole_type";
 
-export const GET_JUMPROLE_BY_ID = `SELECT * FROM trickjump_jumps WHERE id=$1`
-export const GET_JUMPROLE_BY_NAME_AND_SERVER = `SELECT * FROM trickjump_jumps WHERE name=$1 AND server=$2`
+export const GET_JUMPROLE_BY_ID = `SELECT * FROM trickjump_jumps WHERE id=$1`;
+export const GET_JUMPROLE_BY_NAME_AND_SERVER = `SELECT * FROM trickjump_jumps WHERE name=$1 AND server=$2`;
 
-type Queryable = Pool | PoolClient
+type Queryable = Pool | PoolClient;
 
-export enum Kingdom {
-    Cap = 0, Cascade, Sand, Lake, Wooded, Cloud, Lost, NightMetro, Metro, Snow, Seaside, Luncheon, Ruined, Bowser, Moon, DarkSide, DarkerSide, Mushroom
+export enum ModifyJumproleResultType {
+    InvalidJumproleHandle,
+    NoneMatchJumproleHandle,
+    InvalidQuery,
+    NameTooLong,
+    DescriptionTooLong,
+    LocationTooLong,
+    JumpTypeTooLong,
+    LinkTooLong,
+    InvalidPropertyChange,
+    Success,
 }
 
-export const KINGDOM_NAMES = ["Cap Kingdom", "Cascade Kingdom", "Sand Kingdom", "Lake Kingdom", "Wooded Kingdom", "Cloud Kingdom", "Lost Kingdom", "Night Metro Kingdom", "Metro Kingdom", "Snow Kingdom", "Seaside Kingdom", "Luncheon Kingdom", "Ruined Kingdom", "Bowser's Kingdom", "Moon Kingdom", "Dark Side", "Darker Side", "Mushroom Kingdom"]
-
-export enum JumproleHandleType {
-    Invalid = 0, ID, NameAndServer
+export interface ModifyJumproleResult {
+    result_type: ModifyJumproleResultType;
+    new: Jumprole | undefined;
 }
 
-export type JumproleHandle = number | [string, Snowflake]
-
-export interface Jumprole {
-    id: number;
-    name: string;
-    description: string;
-    kingdom: Kingdom | null;
-    location: string | null;
-    jump_type: string | null;
-    link: string | null;
-    added_by: Snowflake;
-    updated_at: Date;
-    server: Snowflake;
-    hash: string;
-}
-
-export interface PGJumprole {
-    id: string;
-    name: string;
-    description: string;
-    kingdom?: string;
-    location?: string;
-    jump_type?: string;
-    link?: string;
-    added_by: string;
-    updated_at: string;
-    server: string;
-    hash: string;
-}
-
-export const is_valid_jump_id = function(thing?: unknown): boolean {
-    if (!thing || is_number(thing) === false) {
-        return false
-    }
-    else if (is_number(thing)) {
-        return /^\d{0,11}$/.test(thing.toString())
-    }
-    else {
-        return false;
-    }
-}
-export const is_valid_postgresql_int = is_valid_jump_id
-
-export const check_jumprole_handle = function (thing?: unknown): JumproleHandleType {
-    if (!thing && thing !== 0) {
-        return JumproleHandleType.Invalid
-    }
-    else if (is_valid_jump_id(thing)) {
-        return JumproleHandleType.ID
-    }
-    else if (Array.isArray(thing) && 0 in thing && 1 in thing && thing.length === 2) {
-        if (is_string(thing[0]) && is_valid_Snowflake(thing[1])) {
-            return JumproleHandleType.NameAndServer
-        }
-    }
-    return JumproleHandleType.Invalid
-}
-
-export const PGJumproleSPECIFICATION: Parameter[] = [
-    { type: ParamValueType.UInt4S, name: "id" },
-    { type: ParamValueType.String, name: "name" }, 
-    { type: ParamValueType.String, name: "description" }, 
-    { type: {type: ParamValueType.KingdomIndexS, accepts_null: true, accepts_undefined: true}, name: "kingdom" }, 
-    { type: {type: ParamValueType.String, accepts_null: true, accepts_undefined: true}, name: "location" }, 
-    { type: {type: ParamValueType.String, accepts_null: true, accepts_undefined: true}, name: "jump_type" }, 
-    { type: {type: ParamValueType.String, accepts_null: true, accepts_undefined: true}, name: "link" }, 
-    { type: ParamValueType.Snowflake, name: "added_by" },
-    { type: ParamValueType.DateAsUInt4Like, name: "updated_at" },
-    { type: ParamValueType.Snowflake, name: "server" },
-    { type: ParamValueType.String, name: "hash" }
-]
-
-/**
- * Converts the result received from client.query to our Jumprole object.
- * @param object The supposed PGJumprole to convert to our Jumprole object. It is thoroughly type-checked for validity.
- * @returns Jumprole or null if it was invalid.
- */
-export const PGJumprole_to_Jumprole = function(object: unknown): Jumprole | null {
-
-    if (!object) {
-        return null;
-    }
-    
-    const result = require_properties(object, "PGJumprole_to_Jumprole", ...PGJumproleSPECIFICATION)
-
-    if (result === false) {
-        return null;
-    }
-    // @ts-expect-error
-    if (compute_jumprole_hash(result as Jumprole) !== result.hash) {
-        log(`PGJumprole_to_Jumprole: PGJumprole.hash unexpectedly did not match computed Jumprole hash value! Returning null.`, LogType.Mismatch)
-        return null;
-    }
-    // If it isn't fully complete, we've already returned null; we're safe to return it
-    // @ts-expect-error
-    return result as Jumprole;
-}
-
-export const string_hash = function (thing: string | number): string {
-    const hash = createHash("sha256");
-    // dynamic dispatch ;)
-    hash.update(thing.toString())
-    return hash.digest("base64");
-}
-
-export const optional_hashable = function(thing?: string | number | null): BinaryLike[] {
-    if (thing === null) {
-        return [`null`]
-    }
-    else if (thing === undefined) {
-        return [`undefined`]
-    }
-    else {
-        // throw off attempts to place values that would hash the same way as null or undefined
-        return [thing.toString(), string_hash(thing)]
-    }
-}
-
-export const compute_jumprole_hash = function(jumprole: Jumprole): string {
-    const hash = createHash("sha256");
-    hash.update(jumprole.id.toString());
-    hash.update(jumprole.name);
-    hash.update(jumprole.description);
-    // Make sure we hash null or undefined different than any string value
-    optional_hashable(jumprole.kingdom).forEach(value => hash.update(value));
-    optional_hashable(jumprole.location).forEach(value => hash.update(value));
-    optional_hashable(jumprole.jump_type).forEach(value => hash.update(value));
-    optional_hashable(jumprole.link).forEach(value => hash.update(value));
-    hash.update(jumprole.added_by);
-    hash.update(jumprole.updated_at.getTime().toString());
-    hash.update(jumprole.server);
-    return hash.digest("base64");
-}
-
-export const get_jumprole = async (handle: JumproleHandle, queryable: Queryable): Promise<Jumprole | null> => {
-
+export const get_jumprole = async (
+    handle: JumproleHandle,
+    queryable: Queryable,
+): Promise<Jumprole | null> => {
     const type = check_jumprole_handle(handle);
 
     switch (type) {
@@ -164,56 +48,322 @@ export const get_jumprole = async (handle: JumproleHandle, queryable: Queryable)
         }
         case JumproleHandleType.ID: {
             try {
-                const result = await queryable.query(GET_JUMPROLE_BY_ID, [handle as number]);
-                const row_result = result.rowCount
+                const result = await queryable.query(GET_JUMPROLE_BY_ID, [
+                    handle as number,
+                ]);
+                const row_result = result.rowCount;
                 if (row_result > 1) {
                     // Somehow multiple jumps with the same ID, even though it is guaranteed by PostgreSQL to be unique
-                    log(`get_jumprole: received ${result.rows.length.toString()} rows when getting jumprole using ID ${handle.toString()}! Returning null...`, LogType.Error)
+                    log(
+                        `get_jumprole: received ${result.rows.length.toString()} rows when getting jumprole using ID ${handle.toString()}! Returning null...`,
+                        LogType.Error,
+                    );
                     return null;
-                }
-                else if (row_result === 1) {
+                } else if (row_result === 1) {
                     // Expected case 1
                     return PGJumprole_to_Jumprole(result.rows[0]);
-                }
-                else {
+                } else {
                     // Expected case 2
                     // No jumps with ID
                     return null;
                 }
-            }
-            catch (error) {
-                log(`get_jumprole: unexpected error when getting jumprole with ID ${handle.toString()}. Returning null.`, LogType.Error);
-                log(error, LogType.Error)
+            } catch (error) {
+                log(
+                    `get_jumprole: unexpected error when getting jumprole with ID ${handle.toString()}. Returning null.`,
+                    LogType.Error,
+                );
+                log(error, LogType.Error);
             }
             return null;
         }
         case JumproleHandleType.NameAndServer: {
-            const name = (handle as [string, Snowflake])[0]
-            const server_id = (handle as [string, Snowflake])[1]
+            const name = (handle as [string, Snowflake])[0];
+            const server_id = (handle as [string, Snowflake])[1];
             try {
-                const result = await queryable.query(GET_JUMPROLE_BY_NAME_AND_SERVER, [name, server_id]);
-                const row_result = result.rowCount
+                const result = await queryable.query(
+                    GET_JUMPROLE_BY_NAME_AND_SERVER,
+                    [name, server_id],
+                );
+                const row_result = result.rowCount;
                 if (row_result > 1) {
                     // Somehow multiple jumps with the same name and server, even though they are guaranteed by PostgreSQL to be unique as a pair
-                    log(`get_jumprole: received ${result.rows.length.toString()} rows when getting jumprole using name ${name} and server ${server_id}! Returning null...`, LogType.Error)
+                    log(
+                        `get_jumprole: received ${result.rows.length.toString()} rows when getting jumprole using name ${name} and server ${server_id}! Returning null...`,
+                        LogType.Error,
+                    );
                     return null;
-                }
-                else if (row_result === 1) {
+                } else if (row_result === 1) {
                     // Expected case 1
                     return PGJumprole_to_Jumprole(result.rows[0]);
-                }
-                else {
+                } else {
                     // Expected case 2
                     // No jumps with ID
                     return null;
                 }
-            }
-            catch (error) {
-                log(`get_jumprole: unexpected error when getting jumprole using name ${name} and server ${server_id}! Returning null.`, LogType.Error);
-                log(error, LogType.Error)
+            } catch (error) {
+                log(
+                    `get_jumprole: unexpected error when getting jumprole using name ${name} and server ${server_id}! Returning null.`,
+                    LogType.Error,
+                );
+                log(error, LogType.Error);
             }
             return null;
         }
     }
-}
+};
 
+/**
+ * Changes a `Jumprole` object in the PostgreSQL database.
+ * @param handle The handle which identifies the `Jumprole` to change
+ * @param merger An object which contains the keys to be changed and the values to be changed to.
+ * @param queryable The `Pool` or `PoolClient` to make the query using
+ * @returns `ModifyJumproleResult` indicating the result and what the new object is, if it succeeded
+ */
+export const modify_jumprole = async function (
+    handle: JumproleHandle,
+    merger: Partial<Jumprole>,
+    queryable: Queryable,
+): Promise<ModifyJumproleResult> {
+    // Make sure we have a valid merger object.
+    // It should only have properties that are listed in the Jumprole specification.
+    const merger_result = check_specification<Partial<Jumprole>>(
+        merger,
+        "modify_jumprole",
+        // Some properties may be left out if they don't need to be changed
+        // So use a Specification for a Partial<Jumprole> object.
+        // This will still not allow extraneous properties.
+        PartialJumproleSPECIFICATION,
+    );
+
+    // If we didn't get a valid merger passed as an argument
+    if (merger_result === false) {
+        return {
+            result_type: ModifyJumproleResultType.InvalidPropertyChange,
+            new: undefined,
+        };
+    }
+
+    // The keys to modify. Filter all of the keys of merger_result, which
+    // comes out with all of the keys included in the Jumprole specification,
+    // to just the ones which aren't undefined, i.e. they are being specified
+    // and should be changed
+    const change_keys = Object.keys(merger_result).filter(
+        (prop_name: string) =>
+            merger_result[prop_name as keyof Jumprole] !== undefined,
+    );
+
+    // Useful for generating the substitution signatures, i.e. $2, in the
+    // database query string
+    const property_count = change_keys.length;
+
+    const request_head = `UPDATE trickjump_jumps SET `;
+    let request_tail: string;
+    let query_tail: any[] = [];
+
+    const type = check_jumprole_handle(handle);
+    switch (type) {
+        // Construct a database query based on the ID attribute of
+        // the jumprole we're changing. This part of the query comes after
+        // the part that sets the properties, so we have to add one to the
+        // property count to get our substitution index, because all of the query
+        // string shares one array of parameters to be substituted into the query
+        case JumproleHandleType.ID: {
+            let id = handle as number;
+            request_tail = ` WHERE id=$${property_count + 1}`;
+            query_tail.push(id);
+            break;
+        }
+        case JumproleHandleType.NameAndServer: {
+            let handle_tuple = handle as [string, string];
+            request_tail = ` WHERE name=$${property_count + 1} AND server=$${
+                property_count + 2
+            }`;
+            query_tail.push(...handle_tuple);
+            break;
+        }
+        case JumproleHandleType.Invalid: {
+            return {
+                result_type: ModifyJumproleResultType.InvalidJumproleHandle,
+                new: undefined,
+            };
+        }
+        default: {
+            return {
+                result_type: ModifyJumproleResultType.InvalidJumproleHandle,
+                new: undefined,
+            };
+        }
+    }
+
+    // Used to represent a property assignment that will be
+    // filled out in the DB query string
+    type QueryAssignment = [string, any];
+    const stringify_assignment = function (
+        assignment: QueryAssignment,
+        index: number,
+    ): string {
+        return `${assignment[0]} = $${index.toString()}`;
+    };
+
+    let query_assignments: QueryAssignment[] = [];
+
+    for (const change_key of change_keys) {
+        switch (change_key) {
+            // Make sure the values given for these properties
+            // in the merger object have the correct length
+            case "name": {
+                let name = merger_result["name"] as string | null;
+                if (name === null || name.length <= 100) {
+                    query_assignments.push(["name", name]);
+                } else {
+                    log(
+                        `modify_jumprole: merger had property "name" with length longer than 100. Returning.`,
+                        LogType.Error,
+                    );
+                    return {
+                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        new: undefined,
+                    };
+                }
+                break;
+            }
+            case "description": {
+                let description = merger_result["description"] as string | null;
+                if (description === null || description.length <= 1500) {
+                    query_assignments.push(["description", description]);
+                } else {
+                    log(
+                        `modify_jumprole: merger had property "description" with length longer than 1500. Returning.`,
+                        LogType.Error,
+                    );
+                    return {
+                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        new: undefined,
+                    };
+                }
+                break;
+            }
+            case "location": {
+                let location = merger_result["location"] as string | null;
+                if (location === null || location.length <= 200) {
+                    query_assignments.push(["location", location]);
+                } else {
+                    log(
+                        `modify_jumprole: merger had property "location" with length longer than 200. Returning.`,
+                        LogType.Error,
+                    );
+                    return {
+                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        new: undefined,
+                    };
+                }
+                break;
+            }
+            case "jump_type": {
+                let jump_type = merger_result["jump_type"] as string | null;
+                if (jump_type === null || jump_type.length <= 200) {
+                    query_assignments.push(["jump_type", jump_type]);
+                } else {
+                    log(
+                        `modify_jumprole: merger had property "jump_type" with length longer than 200. Returning.`,
+                        LogType.Error,
+                    );
+                    return {
+                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        new: undefined,
+                    };
+                }
+                break;
+            }
+            case "link": {
+                let link = merger_result["link"] as string | null;
+                if (link === null || link.length <= 150) {
+                    query_assignments.push(["link", link]);
+                } else {
+                    log(
+                        `modify_jumprole: merger had property "link" with length longer than 150. Returning.`,
+                        LogType.Error,
+                    );
+                    return {
+                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        new: undefined,
+                    };
+                }
+                break;
+            }
+            // Pass the date of updated_at to the server as a number, not a Date object
+            case "updated_at": {
+                let date = merger_result["updated_at"] as Date | null;
+                if (date === null) {
+                    query_assignments.push(["updated_at", null]);
+                } else {
+                    query_assignments.push([
+                        "updated_at",
+                        Math.round(date.getTime() / 1000),
+                    ]);
+                }
+                continue;
+            }
+            // Do not make a query assignment for the hash.
+            // We will deal with it later.
+            case "hash": {
+                continue;
+            }
+            default: {
+                query_assignments.push([
+                    change_key,
+                    merger_result[change_key as keyof Jumprole],
+                ]);
+            }
+        }
+    }
+
+    // Compute the hash of the new object for the database
+    // Get the old object from the database first
+    let target_obj = await get_jumprole(handle, queryable);
+    if (target_obj === null) {
+        return {
+            result_type: ModifyJumproleResultType.NoneMatchJumproleHandle,
+            new: undefined,
+        };
+    }
+
+    // Assign the merger object to the old object, merging it and creating the new one
+    Object.assign(target_obj, merger_result);
+
+    let hash = compute_jumprole_hash(target_obj);
+    target_obj.hash = hash;
+
+    // Add the correct hash to the query assignments
+    query_assignments.push(["hash", hash]);
+
+    // Create the part of the query string where we set the properties
+    const request_mid = query_assignments
+        .map((assignment, index) => stringify_assignment(assignment, index))
+        .join(", ");
+    const query_start = query_assignments.map(assignment => assignment[1]);
+
+    const full_request = request_head + request_mid + request_tail;
+    const full_query_params = query_start.concat(query_tail);
+    try {
+        await queryable.query(full_request, full_query_params);
+        return {
+            result_type: ModifyJumproleResultType.Success,
+            new: target_obj,
+        };
+    } catch (err) {
+        log(
+            `modify_jumprole: unexpectedly failed when attempting query.`,
+            LogType.Error,
+        );
+        log(`Query string:`, LogType.Error);
+        log(full_request, LogType.Error);
+        log(`Query parameters: `, LogType.Error);
+        log(safe_serialize(full_query_params), LogType.Error);
+        log(safe_serialize(err), LogType.Error);
+        return {
+            result_type: ModifyJumproleResultType.InvalidQuery,
+            new: undefined,
+        };
+    }
+};
