@@ -13,7 +13,7 @@
         "noFallthroughCasesInSwitch": true,
         "noUnusedLocals": true,
         "noUnusedParameters": true,
-        "target": "ES2021"
+        "target": "esnext"
     },
     "include": [
         "src/**/*"

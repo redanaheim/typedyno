@@ -1,13 +1,13 @@
 import { BinaryLike, createHash } from "node:crypto";
-import { log, LogType } from "../../utilities/log";
+import { log, LogType } from "../../../utilities/log";
 import {
     ParamValueType,
     PartialSpecification,
     require_properties,
     Specification,
-} from "../../utilities/runtime_typeguard";
-import { is_valid_Snowflake, Snowflake } from "../../utilities/permissions";
-import { is_number, is_string } from "../../utilities/typeutils";
+} from "../../../utilities/runtime_typeguard";
+import { is_valid_Snowflake, Snowflake } from "../../../utilities/permissions";
+import { is_number, is_string } from "../../../utilities/typeutils";
 
 export enum Kingdom {
     Cap = 0,
