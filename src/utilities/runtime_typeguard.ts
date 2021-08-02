@@ -33,6 +33,105 @@ export enum ParamValueType {
     KingdomIndexS = "positive string-represented integer less than 19", // number
     KingdomIndexN = "positive number-represented integer less than 19", // number
 }
+
+/**
+ * ParamValueTypes that are completely symmetric
+ */
+export type BaseParamValueType =
+    | ParamValueType.String
+    | ParamValueType.Number
+    | ParamValueType.Boolean
+    | ParamValueType.Snowflake
+    | ParamValueType.UInt4N
+    | ParamValueType.UInt4S
+    | ParamValueType.UInt8B
+    | ParamValueType.UInt8S
+    | ParamValueType.BigInt
+    | ParamValueType.Date
+    | ParamValueType.KingdomIndexN
+    | ParamValueType.KingdomIndexS;
+/**
+ * ParamValueTypes that may give a different normalized type than is provided
+ */
+export type OffshootParamValueType =
+    | ParamValueType.NumberLike
+    | ParamValueType.IntegerLike
+    | ParamValueType.UnsignedIntegerLike
+    | ParamValueType.UInt4S
+    | ParamValueType.UInt4Like
+    | ParamValueType.DateAsUInt4Like
+    | ParamValueType.UInt8S
+    | ParamValueType.BigIntLike
+    | ParamValueType.KingdomIndexS;
+
+// TODO: Implement transforming from one compatible type to another, for instance for PGJumprole to Jumprole
+export const TRANSFORM_TABLE: Record<ParamValueType, BaseParamValueType[]> = {
+    [ParamValueType.String]: [],
+    [ParamValueType.Number]: [],
+    [ParamValueType.Boolean]: [],
+    [ParamValueType.NumberLike]: [ParamValueType.String, ParamValueType.Number],
+    [ParamValueType.IntegerLike]: [
+        ParamValueType.String,
+        ParamValueType.Number,
+        ParamValueType.BigInt,
+    ],
+    [ParamValueType.UnsignedIntegerLike]: [
+        ParamValueType.String,
+        ParamValueType.Number,
+        ParamValueType.BigInt,
+    ],
+    [ParamValueType.Snowflake]: [
+        ParamValueType.String,
+        ParamValueType.Snowflake,
+        ParamValueType.BigInt,
+        ParamValueType.UInt8B,
+    ],
+    [ParamValueType.UInt4S]: [
+        ParamValueType.UInt4N,
+        ParamValueType.Number,
+        ParamValueType.BigInt,
+    ],
+    [ParamValueType.UInt4N]: [
+        ParamValueType.Number,
+        ParamValueType.UInt4S,
+        ParamValueType.String,
+        ParamValueType.BigInt,
+    ],
+    [ParamValueType.UInt4Like]: [
+        ParamValueType.UInt4N,
+        ParamValueType.Number,
+        ParamValueType.UInt4S,
+        ParamValueType.String,
+        ParamValueType.BigInt,
+    ],
+    [ParamValueType.DateAsUInt4Like]: [
+        ParamValueType.Date,
+        ParamValueType.UInt4N,
+        ParamValueType.UInt4S,
+    ],
+    [ParamValueType.UInt8S]: [
+        ParamValueType.UInt8B,
+        ParamValueType.String,
+        ParamValueType.Snowflake,
+    ],
+    [ParamValueType.UInt8B]: [
+        ParamValueType.UInt8S,
+        ParamValueType.String,
+        ParamValueType.Snowflake,
+    ],
+    [ParamValueType.UInt8Like]: [
+        ParamValueType.UInt8S,
+        ParamValueType.UInt8B,
+        ParamValueType.String,
+        ParamValueType.Snowflake,
+    ],
+    [ParamValueType.BigInt]: [ParamValueType.String],
+    [ParamValueType.BigIntLike]: [ParamValueType.String, ParamValueType.BigInt],
+    [ParamValueType.Date]: [ParamValueType.UInt4N, ParamValueType.UInt4S],
+    [ParamValueType.KingdomIndexN]: [ParamValueType.KingdomIndexS],
+    [ParamValueType.KingdomIndexS]: [ParamValueType.KingdomIndexN],
+};
+
 export interface OptionalParamType {
     value: ParamValueType;
     accepts_null: boolean;
