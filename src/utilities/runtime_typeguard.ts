@@ -171,10 +171,7 @@ export interface ParameterValidationResult {
     normalized_value?: NormalizedParameterValue;
 }
 
-const is_ParamValueType = function (
-    object?: unknown,
-): object is ParamValueType {
-    // @ts-expect-error
+const is_ParamValueType = function (object: any): object is ParamValueType {
     return Object.values(ParamValueType).includes(object);
 };
 
@@ -192,6 +189,8 @@ export const validate_ParamType = function (
         ) {
             return ParamTypeValidationResult.Invalid;
         } else if (
+            // I did the check up there! stupid TypeScript compiler
+            // { ts-malfunction }
             // @ts-expect-error
             is_ParamValueType(object.type) &&
             // @ts-expect-error

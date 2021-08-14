@@ -1,6 +1,6 @@
-import { Guild } from "discord.js";
+import { DMChannel, Guild, Message, TextChannel } from "discord.js";
 
-export const is_string = function (thing?: unknown): thing is string {
+export const is_string = function (thing: unknown): thing is string {
     if (thing === "") {
         return true;
     } else if (!thing) {
@@ -34,11 +34,31 @@ export const is_boolean = function (thing?: unknown): thing is boolean {
 
 // TODO: Make utility function that checks what type of guild a Guild is (i.e. a server, group DM, etc.)
 
-export const is_server = function (guild?: Guild): boolean {
+export const is_server = function (guild: any): boolean {
     if (!guild) {
         return false;
     }
-    return true;
+    return guild instanceof Guild;
+};
+
+/**
+ * Returns whether the message is in a DMChannel
+ * @param message The `Message` object to check
+ */
+export const is_dm = function (message?: Message): boolean {
+    return message?.channel instanceof DMChannel;
+};
+
+/**
+ * Returns whether the message is in a non-DM TextChannel
+ * @param message The `Message` object to check
+ * @returns
+ */
+export const is_text_channel = function (message?: Message): boolean {
+    return (
+        message?.channel instanceof TextChannel &&
+        message?.guild instanceof Guild
+    );
 };
 
 export const escape_reg_exp = function (str: string): string {

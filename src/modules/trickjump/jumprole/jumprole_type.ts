@@ -262,6 +262,8 @@ export const PGJumprole_to_Jumprole = function (
     if (result === false) {
         return null;
     }
+    // A record can have any string as keys!
+    // { ts-malfunction }
     // @ts-expect-error
     if (compute_jumprole_hash(result as Jumprole) !== result.hash) {
         log(
@@ -271,6 +273,7 @@ export const PGJumprole_to_Jumprole = function (
         return null;
     }
     // If it isn't fully complete, we've already returned null; we're safe to return it
+    // { ts-malfunction }
     // @ts-expect-error
     return result as Jumprole;
 };
