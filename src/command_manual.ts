@@ -12,6 +12,8 @@ import { escape_reg_exp, is_string } from "./utilities/typeutils";
 export interface CommandArgument {
     // Concise description of the argument's purpose
     name: string;
+    // One-word argument name, for internal use
+    id: string;
     // Whether the argument can be left out
     optional: boolean;
 }
@@ -21,7 +23,7 @@ const is_valid_CommandArgument = function (
 ): thing is CommandArgument {
     if (!thing) {
         return false;
-    } else if (is_string(thing.name) === false) {
+    } else if (is_string(thing.name) === false || is_string(thing.id)) {
         return false;
     } else if (thing.optional !== true && thing.optional !== false) {
         return false;
