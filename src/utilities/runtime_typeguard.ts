@@ -1,3 +1,5 @@
+import { CommandArgument } from "../command_manual";
+import { GetArgsResult } from "./argument_processing/arguments_types";
 import { log, LogType } from "./log";
 import { is_valid_Snowflake } from "./permissions";
 import { is_string, is_number, is_boolean, safe_serialize } from "./typeutils";
@@ -171,7 +173,9 @@ export interface ParameterValidationResult {
     normalized_value?: NormalizedParameterValue;
 }
 
-const is_ParamValueType = function (object: any): object is ParamValueType {
+export const is_ParamValueType = function (
+    object: any,
+): object is ParamValueType {
     return Object.values(ParamValueType).includes(object);
 };
 
@@ -703,6 +707,12 @@ export const require_properties = function (
     }
 };
 
+type Mutable<Spec extends Specification<any>> = Spec extends Specification<
+    infer _T
+>
+    ? Parameter[]
+    : never;
+
 /**
  * Modifies a `Specification` object of a Partial of its original type
  * @param specification The original `Specification` object
@@ -711,7 +721,7 @@ export const require_properties = function (
 export const PartialSpecification = function <T>(
     specification: Specification<T>,
 ): Specification<Partial<T>> {
-    let new_specification: Specification<Partial<T>> = [];
+    let new_specification: Mutable<Specification<Partial<T>>> = [];
     for (const parameter of specification) {
         const parameter_type = validate_ParamType(parameter.type);
 
@@ -757,7 +767,8 @@ export const PartialSpecification = function <T>(
             }
         }
     }
-    return new_specification;
+    Object.freeze(new_specification);
+    return new_specification as Specification<Partial<T>>;
 };
 
 export const check_specification = function <T>(
@@ -794,5 +805,28 @@ export const property_filter = function <T>(
     return new_names;
 };
 
-// @ts-expect-error
-export type Specification<T> = Parameter[];
+export const argument_specification_from_manual = function <
+    T extends readonly CommandArgument[],
+>(manual_args: T): Specification<GetArgsResult<typeof manual_args>["values"]> {
+    let res: Parameter[] = [];
+    for (const arg of manual_args) {
+        let partial: Partial<Parameter> = { name: arg.name };
+        if (is_ParamValueType(arg.further_constraint)) {
+            partial.type = arg.further_constraint;
+        } else partial.type = ParamValueType.String;
+
+        if (arg.optional) {
+            partial.type = {
+                value: partial.type,
+                accepts_null: true,
+                accepts_undefined: false,
+            };
+        }
+
+        res.push(partial as Parameter);
+    }
+    Object.freeze(res);
+    return res as Specification<GetArgsResult<typeof manual_args>["values"]>;
+};
+
+export type Specification<_T> = readonly Parameter[];

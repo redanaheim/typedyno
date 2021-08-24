@@ -7,117 +7,18 @@ import {
 import { MAINTAINER_TAG } from "../../main";
 import { log, LogType } from "../log";
 import { escape_reg_exp, is_string } from "../typeutils";
-
-const is_alphabetic = function (str: string): boolean {
-    if (!is_string(str) || str.length !== 1) return false;
-    else
-        return [
-            "a",
-            "b",
-            "c",
-            "d",
-            "e",
-            "f",
-            "g",
-            "h",
-            "i",
-            "j",
-            "k",
-            "l",
-            "m",
-            "n",
-            "o",
-            "p",
-            "q",
-            "r",
-            "s",
-            "t",
-            "u",
-            "v",
-            "w",
-            "x",
-            "y",
-            "z",
-            "A",
-            "B",
-            "C",
-            "D",
-            "E",
-            "F",
-            "G",
-            "H",
-            "I",
-            "J",
-            "K",
-            "L",
-            "M",
-            "N",
-            "O",
-            "P",
-            "Q",
-            "R",
-            "S",
-            "T",
-            "U",
-            "V",
-            "W",
-            "X",
-            "Y",
-            "Z",
-        ].includes(str);
-};
-
-const is_whitespace = function (str: string): boolean {
-    return str.trim() === "";
-};
-
-const is_digit = function (str: string): boolean {
-    if (!is_string(str) || str.length !== 1) return false;
-    else
-        return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].includes(str);
-};
-
-export enum SyntaxStringParserState {
-    None,
-    PrefixTag,
-    StaticTopLevel,
-    ArgumentIdentifier,
-    KeyOffInCurlyBraces,
-    ArgumentIdentifierInKeyOffInCurlyBraces,
-    ContentInKeyOffInSquareBrackets,
-}
-
-export enum InvalidSyntaxStringReason {
-    DoesNotStartWithPrefixTag = 0,
-    InvalidPrefixTagContent,
-    PrefixTagStartedButNeverCloses,
-    CommandNameDoesNotImmediatelyFollowPrefixTag,
-    ArgumentReferencedMoreThanOnce,
-    NonexistentArgumentReferenced,
-    IllegalArgumentIdentifier,
-    UnmatchedLeftSquareBracket,
-    UnmatchedLeftCurlyBracket,
-    OptionalArgumentReferredToByIdentifierOutsideItsKeyOff,
-    KeyOffArgumentIdentifierRefersToNonOptionalArgument,
-    InvalidContentInKeyOffCurlyBraces,
-    InvalidContentInBetweenKeyOffCurlyBracesAndSquareBrackets,
-    SyntaxStringEndsInNonTopLevelState,
-    MultipleArgumentsReferredToByIdentifierWithoutSeparatingCharacters,
-}
-
-export enum SyntaxStringSegmentType {
-    PrefixTag,
-    ArgumentIdentifier,
-    KeyOffStatement,
-}
-
-export type SyntaxStringSegmentContent = string | SyntaxStringSegment;
-
-interface SyntaxStringSegment {
-    content: SyntaxStringSegmentContent[] | null;
-    type: SyntaxStringSegmentType;
-    argument_number: number | null; // if this is an argument identifier or a key off, the argument number that it represents
-}
+import {
+    ContainedArgumentsList,
+    ContainedSubcommandNames,
+    GetArgsResult,
+    InvalidSyntaxStringReason,
+    is_alphabetic,
+    is_digit,
+    is_whitespace,
+    SyntaxStringParserState,
+    SyntaxStringSegmentContent,
+    SyntaxStringSegmentType,
+} from "./arguments_types";
 
 /**
  * Transforms `str`, parsed as part of a syntax string, into an array of its parts that is transformable into a `RegExp` by `syntax_string_to_argument_regex`.
@@ -515,39 +416,6 @@ export const syntax_string_to_argument_regex = function (
     return return_value;
 };
 
-// Incredibly awesome but somewhat jank idea that lets us have actual, representative types in the values department of GetArgsResult
-// note: only works if the type being passed as ArgumentList is generated using typeof (variable marked as 'as const')
-type Argument<ArgumentList extends readonly CommandArgument[]> =
-    ArgumentList extends readonly (infer T)[] ? T : never;
-
-type ArgumentID<Argument extends CommandArgument> = Argument["id"];
-
-type PossiblyNullable<
-    ArgumentList extends readonly CommandArgument[],
-    ID extends ArgumentID<Argument<ArgumentList>>,
-> = ID extends ArgumentID<Argument<ArgumentList>>
-    ? (Argument<ArgumentList> & { readonly id: ID })["optional"] extends false
-        ? string
-        : string | null
-    : never;
-
-export interface GetArgsResult<
-    ArgumentList extends readonly CommandArgument[],
-> {
-    succeeded: boolean;
-    compiled: boolean;
-    values:
-        | {
-              [ID in ArgumentID<Argument<ArgumentList>>]: PossiblyNullable<
-                  ArgumentList,
-                  ID
-              >;
-          }
-        | null;
-    inconsistent_key_offs: [string, number, boolean][];
-    syntax_string_compilation_error: [InvalidSyntaxStringReason, number] | null;
-}
-
 /**
  *
  * @param prefix The prefix currently in place (because of the server)
@@ -696,22 +564,6 @@ export const get_args = function (
         syntax_string_compilation_error: null,
     };
 };
-
-type ContainedArgumentsList<
-    Arr extends readonly (readonly [string, SubcommandManual])[],
-> = Arr extends readonly (infer Element)[]
-    ? Element extends readonly [string, SubcommandManual]
-        ? Element[1]["arguments"]
-        : never
-    : never;
-
-type ContainedSubcommandNames<
-    Arr extends readonly (readonly [string, SubcommandManual])[],
-> = Arr extends readonly (infer Element)[]
-    ? Element extends readonly [string, SubcommandManual]
-        ? Element[0]
-        : never
-    : never;
 
 /**
  *

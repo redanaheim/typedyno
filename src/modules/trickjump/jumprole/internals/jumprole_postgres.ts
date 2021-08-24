@@ -1,8 +1,8 @@
 import { Pool, PoolClient } from "pg";
-import { log, LogType } from "../../../utilities/log";
-import { Snowflake } from "../../../utilities/permissions";
-import { check_specification } from "../../../utilities/runtime_typeguard";
-import { safe_serialize } from "../../../utilities/typeutils";
+import { log, LogType } from "../../../../utilities/log";
+import { Snowflake } from "../../../../utilities/permissions";
+import { check_specification } from "../../../../utilities/runtime_typeguard";
+import { safe_serialize } from "../../../../utilities/typeutils";
 import {
     check_jumprole_handle,
     compute_jumprole_hash,
