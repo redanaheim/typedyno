@@ -1,6 +1,12 @@
-import { CommandArgument, SimpleCommandManual } from "../command_manual";
-import { log, LogType } from "./log";
-import { escape_reg_exp, is_string } from "./typeutils";
+import { Message } from "discord.js";
+import {
+    CommandArgument,
+    SimpleCommandManual,
+    SubcommandManual,
+} from "../../command_manual";
+import { MAINTAINER_TAG } from "../../main";
+import { log, LogType } from "../log";
+import { escape_reg_exp, is_string } from "../typeutils";
 
 const is_alphabetic = function (str: string): boolean {
     if (!is_string(str) || str.length !== 1) return false;
@@ -126,7 +132,7 @@ interface SyntaxStringSegment {
  * @returns A tuple where `return[0]` is the syntax string, parsed into an array of segments, and `return[1]` is the index at which the last character read was located.
  */
 export const parse_loop_with_initial_state = function (
-    args: CommandArgument[],
+    args: readonly CommandArgument[],
     str: string,
     state: SyntaxStringParserState,
     key_off_stack: number[],
@@ -420,7 +426,7 @@ let syntax_string_compile_cache: {
  */
 export const syntax_string_to_argument_regex = function (
     prefix: string,
-    args: CommandArgument[],
+    args: readonly CommandArgument[],
     syntax_string: string,
 ): [RegExp, { [key: number]: number }] | [InvalidSyntaxStringReason, number] {
     if (
@@ -509,10 +515,37 @@ export const syntax_string_to_argument_regex = function (
     return return_value;
 };
 
-export interface GetArgsResult {
+// Incredibly awesome but somewhat jank idea that lets us have actual, representative types in the values department of GetArgsResult
+// note: only works if the type being passed as ArgumentList is generated using typeof (variable marked as 'as const')
+type Argument<ArgumentList extends readonly CommandArgument[]> =
+    ArgumentList extends readonly (infer T)[] ? T : never;
+
+type ArgumentID<Argument extends CommandArgument> = Argument["id"];
+
+type PossiblyNullable<
+    ArgumentList extends readonly CommandArgument[],
+    ID extends ArgumentID<Argument<ArgumentList>>,
+> = ID extends ArgumentID<Argument<ArgumentList>>
+    ? (Argument<ArgumentList> & { readonly id: ID })["optional"] extends false
+        ? string
+        : string | null
+    : never;
+
+export interface GetArgsResult<
+    ArgumentList extends readonly CommandArgument[],
+> {
     succeeded: boolean;
-    values: { [key: string]: string | null } | null;
+    compiled: boolean;
+    values:
+        | {
+              [ID in ArgumentID<Argument<ArgumentList>>]: PossiblyNullable<
+                  ArgumentList,
+                  ID
+              >;
+          }
+        | null;
     inconsistent_key_offs: [string, number, boolean][];
+    syntax_string_compilation_error: [InvalidSyntaxStringReason, number] | null;
 }
 
 /**
@@ -529,15 +562,24 @@ export const get_args = function (
     prefix: string,
     command: SimpleCommandManual,
     invocation: string,
-): GetArgsResult {
+): GetArgsResult<typeof command.arguments> {
     const result = syntax_string_to_argument_regex(
         prefix,
         command.arguments,
         command.syntax,
     );
 
-    const failed = (): GetArgsResult => {
-        return { succeeded: false, inconsistent_key_offs: [], values: null };
+    const failed = (
+        compiled: boolean,
+        syntax_string_error: [InvalidSyntaxStringReason, number] | null,
+    ): GetArgsResult<typeof command.arguments> => {
+        return {
+            succeeded: false,
+            compiled: compiled,
+            inconsistent_key_offs: [],
+            values: null,
+            syntax_string_compilation_error: syntax_string_error,
+        };
     };
 
     // Processing syntax string failed
@@ -548,14 +590,14 @@ export const get_args = function (
             } had a malformed syntax string (syntax string processing failed with error #${result[0].toString()} at index ${result[1].toString()}). Returning {succeeded: false}...`,
             LogType.Error,
         );
-        return failed();
+        return failed(false, result as [InvalidSyntaxStringReason, number]);
     }
 
     const argument_key_off_list = result[1] as { [key: number]: number };
 
     const match = invocation.match(result[0]);
 
-    if (match === null) return failed();
+    if (match === null) return failed(false, null);
     let groups = match.groups;
 
     let optional_arguments = [];
@@ -574,9 +616,15 @@ export const get_args = function (
             `get_args: command ${command.name} had required arguments and an invocation matched its generated regex, but the match object had no groups! Returning {succeeded: false}...`,
             LogType.Mismatch,
         );
-        return failed();
+        return failed(true, null);
     } else if (groups === undefined)
-        return { succeeded: true, inconsistent_key_offs: [], values: {} };
+        return {
+            succeeded: true,
+            compiled: true,
+            inconsistent_key_offs: [],
+            values: {},
+            syntax_string_compilation_error: null,
+        };
 
     let inconsistent_key_offs: [string, number, boolean][] = [];
 
@@ -605,8 +653,10 @@ export const get_args = function (
     if (inconsistent_key_offs.length > 0) {
         return {
             succeeded: false,
+            compiled: true,
             values: null,
             inconsistent_key_offs: inconsistent_key_offs,
+            syntax_string_compilation_error: null,
         };
     }
 
@@ -623,18 +673,121 @@ export const get_args = function (
                 ].toString()}! Returning {succeeded: false}...`,
                 LogType.Mismatch,
             );
-            return failed();
+            return failed(true, null);
         }
     }
 
-    let compiled: { [key: string]: string | null } = {};
+    let renamed_params: { [key: string]: string | null } = {};
     command.arguments.forEach((arg, index) => {
         // { ts-malfunction }
         // @ts-expect-error
         const val = groups[`arg_${(index + 1).toString()}`];
-        if (is_string(val)) compiled[arg.id] = val;
-        else compiled[arg.name] = null;
+        if (is_string(val)) renamed_params[arg.id] = val;
+        else renamed_params[arg.name] = null;
     });
 
-    return { succeeded: true, values: compiled, inconsistent_key_offs: [] };
+    return {
+        succeeded: true,
+        compiled: true,
+        values: renamed_params as GetArgsResult<
+            typeof command.arguments
+        >["values"],
+        inconsistent_key_offs: [],
+        syntax_string_compilation_error: null,
+    };
+};
+
+type ContainedArgumentsList<
+    Arr extends readonly (readonly [string, SubcommandManual])[],
+> = Arr extends readonly (infer Element)[]
+    ? Element extends readonly [string, SubcommandManual]
+        ? Element[1]["arguments"]
+        : never
+    : never;
+
+type ContainedSubcommandNames<
+    Arr extends readonly (readonly [string, SubcommandManual])[],
+> = Arr extends readonly (infer Element)[]
+    ? Element extends readonly [string, SubcommandManual]
+        ? Element[0]
+        : never
+    : never;
+
+/**
+ *
+ * @param prefix The prefix currently in place (because of the server)
+ * @param invocation The content of the message to check as an invocation for each of the subcommands
+ * @param args A list of tuples where `tuple[0]` is the subcommand's name and `tuple[1]` is the subcommand's manual.
+ * @returns A tuple where `return[0]` is the name of the subcommand that matched and `return[1]` is the `GetArgsResult`, or `false` if there were no valid invocations.
+ */
+export const get_first_matching_subcommand = function <
+    List extends readonly (readonly [string, SubcommandManual])[],
+>(
+    prefix: string,
+    invocation: string,
+    args: List,
+):
+    | [
+          ContainedSubcommandNames<typeof args>,
+          GetArgsResult<ContainedArgumentsList<typeof args>>,
+      ]
+    | false {
+    for (let i = 0; i < args.length; i++) {
+        const subcommand_name = args[i][0] as ContainedSubcommandNames<
+            typeof args
+        >;
+        const manual = args[i][1];
+        const result = get_args(prefix, manual, invocation);
+        if (result.succeeded) return [subcommand_name, result as any];
+    }
+
+    return false;
+};
+
+export const handle_GetArgsResult = async function <
+    ArgumentList extends readonly CommandArgument[],
+>(
+    message: Message,
+    result: GetArgsResult<ArgumentList>,
+    prefix: string | undefined,
+): Promise<boolean> {
+    if (result.succeeded) return true;
+
+    if (result.compiled) {
+        if (result.inconsistent_key_offs.length > 0) {
+            message.channel.send(
+                `Command invocation error: the provided message contained some elements which were inconsistent in determining whether an optional argument was being provided.`,
+            );
+            message.channel.send(
+                `Detail: ${result.inconsistent_key_offs
+                    .map(tuple => {
+                        return `in the case of ${
+                            tuple[0]
+                        }, the first group that determined whether it was provided ${
+                            tuple[2] ? "was" : "was not"
+                        } present, while at least one of the others ${
+                            tuple[2] === false ? "was" : "was not"
+                        }.`;
+                    })
+                    .join("\n")}`,
+            );
+            return false;
+        } else {
+            message.channel.send(
+                `Command invocation error: the command was formatted incorrectly. Use '${prefix}commands' to see the correct syntaxes.`,
+            );
+            return false;
+        }
+    } else {
+        message.channel.send(
+            `Developer-level error: the provided syntax string for the command failed to compile (error: ${(
+                result.syntax_string_compilation_error as [
+                    InvalidSyntaxStringReason,
+                    number,
+                ]
+            ).join()}). Contact @${MAINTAINER_TAG} for help.`,
+        );
+
+        return false;
+    }
 };
