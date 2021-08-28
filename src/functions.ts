@@ -320,7 +320,7 @@ namespace StockCommands {
             const err = `'commands' process: internal error - make_manual neither returned an error nor a paste. Returning BotCommandProcessResultType.DidNotSucceed`;
 
             message.channel.send(err);
-            log(err, LogType.Error);
+            log(String(err), LogType.Error);
             return {
                 type: BotCommandProcessResultType.DidNotSucceed,
             };

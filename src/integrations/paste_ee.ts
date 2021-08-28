@@ -25,7 +25,7 @@ export const create_paste = async function (text: string): Promise<CreatePasteRe
         };
     } catch (err) {
         log("Unexpected error while creating paste:", LogType.Error);
-        log(err, LogType.Error);
+        log(String(err), LogType.Error);
         return {
             error: String(err),
         };

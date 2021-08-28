@@ -77,7 +77,7 @@ export const get_jumprole = async (handle: JumproleHandle, queryable: Queryable)
                 }
             } catch (error) {
                 log(`get_jumprole: unexpected error when getting jumprole with ID ${handle.toString()}. Returning null.`, LogType.Error);
-                log(error, LogType.Error);
+                log(String(error), LogType.Error);
             }
             return null;
         }
@@ -107,7 +107,7 @@ export const get_jumprole = async (handle: JumproleHandle, queryable: Queryable)
                     `get_jumprole: unexpected error when getting jumprole using name ${name} and server ${server_id}! Returning null.`,
                     LogType.Error,
                 );
-                log(error, LogType.Error);
+                log(String(error), LogType.Error);
             }
             return null;
         }

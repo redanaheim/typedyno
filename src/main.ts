@@ -5,7 +5,7 @@ import * as Discord from "discord.js";
 import { process_message } from "./message.js";
 import * as PG from "pg";
 
-import { load_modules } from "./module_loader.js";
+import {load_modules, Module} from './module_loader.js';
 
 import { CONFIG } from "./config.js";
 
@@ -16,9 +16,13 @@ export const STOCK_TABLES = ["prefixes", "users"];
 export const MAINTAINER_TAG = "TigerGold59#8729";
 
 import { log, LogType } from "./utilities/log.js";
+export const MODULES: Module[] = [];
+
+(async () => {
 
 log("Loading modules...", LogType.Status);
-export const MODULES = await load_modules();
+ const a = await load_modules();
+ console.log(a);
 log("Module loading complete.", LogType.Success);
 
 const client = new Discord.Client();
@@ -81,3 +85,4 @@ const error_listener_function_promise_rejection = (error: Error) => {
 client.on("disconnect", error_listener_function_connection);
 process.on("disconnect", error_listener_function_connection);
 process.on("unhandledRejection", error_listener_function_promise_rejection);
+})();

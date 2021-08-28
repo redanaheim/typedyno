@@ -192,7 +192,7 @@ export const set_prefix = async function (server: Guild, pool: PG.Pool, prefix: 
                 `Unexpected database error: set_prefix failed when creating new row {'snowflake': ${server.id}, 'prefix': ${prefix}}. Message:`,
                 LogType.Error,
             );
-            log(err, LogType.Error);
+            log(String(err), LogType.Error);
 
             conditionally_release_pool_client();
 
@@ -226,7 +226,7 @@ export const set_prefix = async function (server: Guild, pool: PG.Pool, prefix: 
                 `Unexpected database error: set_prefix failed when altering row to {'snowflake': ${server.id}, 'prefix': ${prefix}}. Message:`,
                 LogType.Error,
             );
-            log(err, LogType.Error);
+            log(String(err), LogType.Error);
 
             conditionally_release_pool_client();
 
@@ -256,7 +256,7 @@ export const set_prefix = async function (server: Guild, pool: PG.Pool, prefix: 
                 `Unexpected database error: set_prefix failed when deleting row {'snowflake': ${server.id}, 'prefix': ${local_prefix_entry}}. Message:`,
                 LogType.Error,
             );
-            log(err, LogType.Error);
+            log(String(err), LogType.Error);
 
             conditionally_release_pool_client();
 
