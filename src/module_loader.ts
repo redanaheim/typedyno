@@ -36,7 +36,8 @@ export const load_module = async function (name: string): Promise<false | Module
     setTimeout(() => console.log("still here"), 5000);
     console.log("starting import");
     try {
-        module_export = await import(`./modules/${name}/main.js`); // running from /out/
+        const { default: imp } = await import(`./modules/${name}/main.js`) // running from /out/
+        module_export = imp;
     } catch (err) {
         log(`load_module: Fatal error. Exiting...`, LogType.Error);
         console.error(err);

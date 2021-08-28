@@ -17,6 +17,7 @@ export const MAINTAINER_TAG = "TigerGold59#8729";
 
 import { log, LogType } from "./utilities/log.js";
 export const MODULES: Module[] = [];
+export type EventListenerModule = (client: Discord.Client, connection_pool: PG.Pool) => (...args: any) => void;
 
 (async () => {
 
@@ -60,7 +61,6 @@ client.on("message", message => {
 });
 
 // Use event listener files
-export type EventListenerModule = (client: Discord.Client, connection_pool: PG.Pool) => (...args: any) => void;
 for (const listener_name of CONFIG.event_listeners) {
     // Import each through a require (the reason it's not .ts is because the listeners will get compiled to .js)
     let listener: EventListenerModule = require(`../events/${listener_name}.js`)(client, connection_pool);
