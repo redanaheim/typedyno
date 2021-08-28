@@ -1,5 +1,5 @@
 import { Message } from "discord.js";
-import { is_number, is_string } from "./typeutils";
+import { is_number, is_string } from "./typeutils.js";
 
 export type Snowflake = string;
 
@@ -25,7 +25,7 @@ export const Snowflake_to_BigInt = function (thing: Snowflake): number {
     }
 };
 
-export enum InclusionSpecifierType {
+export const enum InclusionSpecifierType {
     Whitelist = "Whitelist",
     Blacklist = "Blacklist",
     DeferringWhitelist = "DeferringWhitelist",
@@ -43,9 +43,7 @@ export interface Permissions {
     users?: InclusionSpecifier;
 }
 
-export const is_valid_InclusionSpecifier = function (
-    thing?: Partial<InclusionSpecifier>,
-): thing is InclusionSpecifier {
+export const is_valid_InclusionSpecifier = function (thing?: Partial<InclusionSpecifier>): thing is InclusionSpecifier {
     if (!thing) {
         return false;
     } else if (
@@ -71,30 +69,18 @@ export const is_valid_InclusionSpecifier = function (
 export const is_valid_Permissions = function (thing?: any): boolean {
     if (!thing) {
         return false;
-    } else if (
-        thing.servers !== null &&
-        thing.servers !== undefined &&
-        is_valid_InclusionSpecifier(thing.servers) === false
-    ) {
+    } else if (thing.servers !== null && thing.servers !== undefined && is_valid_InclusionSpecifier(thing.servers) === false) {
         return false;
-    } else if (
-        thing.channels !== null &&
-        thing.channels !== undefined &&
-        is_valid_InclusionSpecifier(thing.channels) === false
-    ) {
+    } else if (thing.channels !== null && thing.channels !== undefined && is_valid_InclusionSpecifier(thing.channels) === false) {
         return false;
-    } else if (
-        thing.users !== null &&
-        thing.users !== undefined &&
-        is_valid_InclusionSpecifier(thing.users) === false
-    ) {
+    } else if (thing.users !== null && thing.users !== undefined && is_valid_InclusionSpecifier(thing.users) === false) {
         return false;
     }
 
     return true;
 };
 
-export enum TentativePermissionType {
+export const enum TentativePermissionType {
     AllowedIfLowerLevelWhitelisted,
     AllowedThroughWhitelistIfLowerLevelAllowed, // indicates to allowed() function that a whitelist is the reason this is allowed. this allows
     // it to override the DeferringBlacklist and DeferringWhitelist AllowedIfLowerLevelWhitelisted result
@@ -102,10 +88,7 @@ export enum TentativePermissionType {
     NotAllowed,
 }
 
-export const allowed_under = function (
-    snowflake?: Snowflake,
-    specifier?: InclusionSpecifier,
-): TentativePermissionType {
+export const allowed_under = function (snowflake?: Snowflake, specifier?: InclusionSpecifier): TentativePermissionType {
     if (!snowflake || is_valid_Snowflake(snowflake) === false) {
         return TentativePermissionType.NotAllowed;
     }
@@ -142,10 +125,7 @@ export const allowed_under = function (
     }
 };
 
-export const allowed = function (
-    message: Message,
-    permissions?: Permissions,
-): boolean {
+export const allowed = function (message: Message, permissions?: Permissions): boolean {
     if (!permissions) {
         return true;
     }
@@ -220,7 +200,7 @@ export const allowed = function (
 };
 
 /* 
-enum PermittedByWhitelistType {
+const enum PermittedByWhitelistType {
     PermissionsOne,
     PermissionsTwo,
     Both

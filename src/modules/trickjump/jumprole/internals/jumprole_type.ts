@@ -1,18 +1,10 @@
 import { BinaryLike, createHash } from "node:crypto";
-import { log, LogType } from "../../../../utilities/log";
-import {
-    ParamValueType,
-    PartialSpecification,
-    require_properties,
-    Specification,
-} from "../../../../utilities/runtime_typeguard";
-import {
-    is_valid_Snowflake,
-    Snowflake,
-} from "../../../../utilities/permissions";
-import { is_number, is_string } from "../../../../utilities/typeutils";
+import { log, LogType } from "../../../../utilities/log.js";
+import { ParamValueType, PartialSpecification, require_properties, Specification } from "../../../../utilities/runtime_typeguard.js";
+import { is_valid_Snowflake, Snowflake } from "../../../../utilities/permissions.js";
+import { is_number, is_string } from "../../../../utilities/typeutils.js";
 
-export enum Kingdom {
+export const enum Kingdom {
     Cap = 0,
     Cascade,
     Sand,
@@ -58,9 +50,7 @@ export type Lowercased<List extends readonly string[]> = {
     [Key in keyof List]: Lowercase<List[Key] & string>;
 };
 
-export const KINGDOM_NAMES_LOWERCASE = KINGDOM_NAMES.map(name =>
-    name.toLowerCase(),
-) as unknown as Lowercased<typeof KINGDOM_NAMES>;
+export const KINGDOM_NAMES_LOWERCASE = KINGDOM_NAMES.map(name => name.toLowerCase()) as unknown as Lowercased<typeof KINGDOM_NAMES>;
 
 export const KingdomNameToKingdom = (str: string): Kingdom | null => {
     const index = KINGDOM_NAMES_LOWERCASE.indexOf(str.toLowerCase() as any);
@@ -69,7 +59,7 @@ export const KingdomNameToKingdom = (str: string): Kingdom | null => {
 
 export type JumproleHandle = number | [string, Snowflake];
 
-export enum JumproleHandleType {
+export const enum JumproleHandleType {
     Invalid = 0,
     ID,
     NameAndServer,
@@ -121,9 +111,7 @@ export const string_hash = function (thing: string | number): string {
     return hash.digest("base64");
 };
 
-export const optional_hashable = function (
-    thing?: string | number | null,
-): BinaryLike[] {
+export const optional_hashable = function (thing?: string | number | null): BinaryLike[] {
     if (thing === null) {
         return [`null`];
     } else if (thing === undefined) {
@@ -150,19 +138,12 @@ export const compute_jumprole_hash = function (jumprole: Jumprole): string {
     return hash.digest("base64");
 };
 
-export const check_jumprole_handle = function (
-    thing?: unknown,
-): JumproleHandleType {
+export const check_jumprole_handle = function (thing?: unknown): JumproleHandleType {
     if (!thing && thing !== 0) {
         return JumproleHandleType.Invalid;
     } else if (is_valid_jump_id(thing)) {
         return JumproleHandleType.ID;
-    } else if (
-        Array.isArray(thing) &&
-        0 in thing &&
-        1 in thing &&
-        thing.length === 2
-    ) {
+    } else if (Array.isArray(thing) && 0 in thing && 1 in thing && thing.length === 2) {
         if (is_string(thing[0]) && is_valid_Snowflake(thing[1])) {
             return JumproleHandleType.NameAndServer;
         }
@@ -254,26 +235,19 @@ export const JumproleSPECIFICATION: Specification<Jumprole> = [
     { type: ParamValueType.String, name: "hash" },
 ] as const;
 
-export const PartialJumproleSPECIFICATION: Specification<Partial<Jumprole>> =
-    PartialSpecification(JumproleSPECIFICATION);
+export const PartialJumproleSPECIFICATION: Specification<Partial<Jumprole>> = PartialSpecification(JumproleSPECIFICATION);
 
 /**
  * Converts the result received from client.query to our Jumprole object.
  * @param object The supposed PGJumprole to convert to our Jumprole object. It is thoroughly type-checked for validity.
  * @returns Jumprole or null if it was invalid.
  */
-export const PGJumprole_to_Jumprole = function (
-    object: unknown,
-): Jumprole | null {
+export const PGJumprole_to_Jumprole = function (object: unknown): Jumprole | null {
     if (!object) {
         return null;
     }
 
-    const result = require_properties(
-        object,
-        "PGJumprole_to_Jumprole",
-        ...PGJumproleSPECIFICATION,
-    );
+    const result = require_properties(object, "PGJumprole_to_Jumprole", ...PGJumproleSPECIFICATION);
 
     if (result === false) {
         return null;
@@ -282,10 +256,7 @@ export const PGJumprole_to_Jumprole = function (
     // { ts-malfunction }
     // @ts-expect-error
     if (compute_jumprole_hash(result as Jumprole) !== result.hash) {
-        log(
-            `PGJumprole_to_Jumprole: PGJumprole.hash unexpectedly did not match computed Jumprole hash value! Returning null.`,
-            LogType.Mismatch,
-        );
+        log(`PGJumprole_to_Jumprole: PGJumprole.hash unexpectedly did not match computed Jumprole hash value! Returning null.`, LogType.Mismatch);
         return null;
     }
     // If it isn't fully complete, we've already returned null; we're safe to return it

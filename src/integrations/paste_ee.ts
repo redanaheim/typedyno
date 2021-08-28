@@ -1,4 +1,4 @@
-import { log, LogType } from "../utilities/log";
+import { log, LogType } from "../utilities/log.js";
 
 export interface Paste {
     id: string;
@@ -15,15 +15,11 @@ export const url = function (paste: Paste): string {
     return "https://paste.ee/r/" + paste.id;
 };
 
-export const create_paste = async function (
-    text: string,
-): Promise<CreatePasteResult> {
-    let paste = require("paste.ee") as (
-        data: string,
-        token: string,
-    ) => Promise<{ id: string }>;
+import Paste from "paste.ee";
+
+export const create_paste = async function (text: string): Promise<CreatePasteResult> {
     try {
-        const posted = await paste(text, PASTE_API_TOKEN);
+        const posted = await Paste(text, PASTE_API_TOKEN);
         return {
             paste: posted,
         };

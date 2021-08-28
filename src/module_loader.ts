@@ -1,21 +1,13 @@
 import { randomBytes } from "crypto";
-import {
-    BotCommand,
-    is_valid_BotCommand,
-    STOCK_BOT_COMMANDS,
-} from "./functions";
-import { CONFIG, STOCK_TABLES } from "./main";
-import { log, LogType } from "./utilities/log";
-import { is_valid_Permissions, Permissions } from "./utilities/permissions";
-import { is_string } from "./utilities/typeutils";
+import { manual_of } from "./command_manual.js";
+import { BotCommand, is_valid_BotCommand, STOCK_BOT_COMMANDS } from "./functions.js";
+import { STOCK_TABLES } from "./main.js";
+import { CONFIG } from "./config.js";
+import { log, LogType } from "./utilities/log.js";
+import { is_valid_Permissions, Permissions } from "./utilities/permissions.js";
+import { filter_map, is_string } from "./utilities/typeutils.js";
 
 type ModuleCommand = BotCommand;
-
-/**
- * An object that a valid module must pass to its module.exports in order to be loaded, as long as its name is in "use"
- * in config.
- * A module provides extra commands to functions.ts for parsing, so long as the user is permitted
- */
 export interface Module {
     // Module name
     name: string;
@@ -39,8 +31,17 @@ export interface Module {
  * @param name The folder name inside `/src/modules/` to require `index.js` from
  * @returns `Module` object if the require returned a valid module object, or false if it didn't
  */
-export const load_module = function (name: string): Module | false {
-    const module_export: Partial<Module> = require(`../src/modules/${name}/index.js`); // running from /out/
+export const load_module = async function (name: string): Promise<false | Module> {
+    let module_export: Partial<Module> = {};
+    setTimeout(() => console.log("still here"), 5000);
+    console.log("starting import");
+    try {
+        module_export = await import(`./modules/${name}/main.js`); // running from /out/
+    } catch (err) {
+        log(`load_module: Fatal error. Exiting...`, LogType.Error);
+        console.error(err);
+    }
+    console.log("import done");
 
     if (!module_export) {
         return false;
@@ -48,17 +49,11 @@ export const load_module = function (name: string): Module | false {
         return false;
     } else if (Array.isArray(module_export.tables) === false) {
         return false;
-    } else if (
-        module_export.servers_are_universes !== false &&
-        module_export.servers_are_universes !== true
-    ) {
+    } else if (module_export.servers_are_universes !== false && module_export.servers_are_universes !== true) {
         return false;
     } else if (is_valid_Permissions(module_export) === false) {
         return false;
-    } else if (
-        module_export.hide_when_contradicts_permissions !== false &&
-        module_export.hide_when_contradicts_permissions !== true
-    ) {
+    } else if (module_export.hide_when_contradicts_permissions !== false && module_export.hide_when_contradicts_permissions !== true) {
         return false;
     } else if (Array.isArray(module_export.functions) === false) {
         return false;
@@ -84,10 +79,7 @@ export const load_module = function (name: string): Module | false {
     return module_export as Module;
 };
 
-export const has_overlap = function <T>(
-    array_one: T[],
-    array_two: T[],
-): T | false {
+export const has_overlap = function <T>(array_one: T[], array_two: T[]): T | false {
     for (const element of array_one) {
         if (array_two.includes(element)) {
             return element;
@@ -103,7 +95,7 @@ export const has_overlap = function <T>(
  * 2. Of modules that conflict with each other, modules toward the end of the `"use"` array in `CONFIG` will be thrown out.
  * @returns An array of `Module` objects with no table conflicts or command conflicts
  */
-export const load_modules = function (): Module[] {
+export const load_modules = async function (): Promise<Module[]> {
     const use = CONFIG.use;
 
     let modules = [];
@@ -113,7 +105,7 @@ export const load_modules = function (): Module[] {
             continue;
         }
 
-        const module_obj = load_module(element);
+        const module_obj = await load_module(element);
 
         if (module_obj === false) {
             continue;
@@ -133,12 +125,18 @@ export const load_modules = function (): Module[] {
         }
         return dictionary;
     })();
-    let function_name_dictionary: { [key: string]: string } = (function (): {
+    let function_name_dictionary: Record<string, string> = (function (): {
         [key: string]: string;
     } {
         let dictionary: { [key: string]: string } = {};
         for (const bot_command of STOCK_BOT_COMMANDS) {
-            dictionary[bot_command.command_manual.name] = stock_symbol;
+            const manual = manual_of(bot_command);
+            if (manual === undefined) {
+                log(`load_modules skipped stock bot function: instance had no manual saved as metadata. Continuing...`, LogType.Error);
+                continue;
+            }
+
+            dictionary[manual.name] = stock_symbol;
         }
         return dictionary;
     })();
@@ -146,19 +144,14 @@ export const load_modules = function (): Module[] {
     let valid_modules: Module[] = [];
 
     for (const module of modules) {
-        const table_overlap = has_overlap(
-            module.tables,
-            Object.keys(table_name_dictionary),
-        );
+        const table_overlap = has_overlap(module.tables, Object.keys(table_name_dictionary));
         if (table_overlap !== false) {
             let overlap_keep = table_name_dictionary[table_overlap];
             log(
                 `Conflict detected while loading modules: Module ${
                     module.name
                 } attempted to claim PostgreSQL table name ${table_overlap} which was already in use by ${
-                    overlap_keep === stock_symbol
-                        ? "the system"
-                        : `"${overlap_keep}"`
+                    overlap_keep === stock_symbol ? "the system" : `"${overlap_keep}"`
                 }. Module ${module.name} will not be loaded.`,
                 LogType.Incompatibility,
             );
@@ -168,22 +161,29 @@ export const load_modules = function (): Module[] {
                 table_name_dictionary[table_name] = module.name;
             }
         }
-        const module_function_names = module.functions.map(
-            command => command.command_manual.name,
+        const module_function_names = filter_map<BotCommand, string>(
+            module.functions,
+            <ThrowawaySymbol extends symbol>(command: BotCommand, _index: number, delete_symbol: ThrowawaySymbol): string | ThrowawaySymbol => {
+                const manual = manual_of(command);
+                if (manual === undefined) {
+                    log(
+                        `load_modules skipped bot function from module "${module.name}: instance had no manual saved as metadata. Continuing...`,
+                        LogType.Error,
+                    );
+                    return delete_symbol;
+                }
+                return manual?.name;
+            },
         );
-        const function_overlap = has_overlap(
-            module_function_names,
-            Object.keys(function_name_dictionary),
-        );
+
+        const function_overlap = has_overlap(module_function_names, Object.keys(function_name_dictionary));
         if (function_overlap !== false) {
             let overlap_keep = function_name_dictionary[function_overlap];
             log(
                 `Conflict detected while loading modules: Module ${
                     module.name
                 } attempted to register command name ${function_overlap} which was already in use by ${
-                    overlap_keep === stock_symbol
-                        ? "the system"
-                        : `"${overlap_keep}"`
+                    overlap_keep === stock_symbol ? "the system" : `"${overlap_keep}"`
                 }. Module ${module.name} will not be loaded.`,
                 LogType.Incompatibility,
             );
@@ -199,3 +199,9 @@ export const load_modules = function (): Module[] {
 
     return valid_modules;
 };
+
+/**
+ * An object that a valid module must pass to its module.exports in order to be loaded, as long as its name is in "use"
+ * in config.
+ * A module provides extra commands to functions.ts for parsing, so long as the user is permitted
+ */

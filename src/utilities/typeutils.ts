@@ -1,4 +1,5 @@
 import { DMChannel, Guild, Message, TextChannel } from "discord.js";
+import { readFile } from "fs";
 
 export const is_string = function (thing: unknown): thing is string {
     if (thing === "") {
@@ -55,10 +56,7 @@ export const is_dm = function (message?: Message): boolean {
  * @returns
  */
 export const is_text_channel = function (message?: Message): boolean {
-    return (
-        message?.channel instanceof TextChannel &&
-        message?.guild instanceof Guild
-    );
+    return message?.channel instanceof TextChannel && message?.guild instanceof Guild;
 };
 
 export const escape_reg_exp = function (str: string): string {
@@ -81,3 +79,33 @@ export const safe_serialize = function (value: any): string {
 export type Unknown<T> = { [P in keyof T]: unknown };
 
 export type OptionalNull<T> = { [P in keyof T]: T[P] | null };
+
+export const filter_map = <Element, ResultElement>(
+    list: Element[],
+    callback: <ThrowawaySymbol extends symbol>(element: Element, index: number, throwaway: ThrowawaySymbol) => ResultElement | ThrowawaySymbol,
+): ResultElement[] => {
+    let res = [];
+    const throwaway_symbol = Symbol(`filter_map ${Date.now().toString()}`);
+    for (let i = 0; i < list.length; i++) {
+        const result = callback(list[i], i, throwaway_symbol);
+        if (result === throwaway_symbol) continue;
+        else res.push(result as ResultElement);
+    }
+
+    return res;
+};
+
+export const read_file = async function (filepath: string): Promise<string> {
+    return new Promise((res, rej) => {
+        readFile(
+            filepath,
+            {
+                encoding: "utf-8",
+            },
+            (err, data) => {
+                if (err === null) res(data);
+                else rej(err);
+            },
+        );
+    });
+};

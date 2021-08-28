@@ -1,8 +1,8 @@
-import { Pool, PoolClient } from "pg";
-import { log, LogType } from "../../../../utilities/log";
-import { Snowflake } from "../../../../utilities/permissions";
-import { check_specification } from "../../../../utilities/runtime_typeguard";
-import { safe_serialize } from "../../../../utilities/typeutils";
+import * as PG from "pg";
+import { log, LogType } from "../../../../utilities/log.js";
+import { Snowflake } from "../../../../utilities/permissions.js";
+import { check_specification } from "../../../../utilities/runtime_typeguard.js";
+import { safe_serialize } from "../../../../utilities/typeutils.js";
 import {
     check_jumprole_handle,
     compute_jumprole_hash,
@@ -12,7 +12,7 @@ import {
     JumproleSPECIFICATION,
     PartialJumproleSPECIFICATION,
     PGJumprole_to_Jumprole,
-} from "./jumprole_type";
+} from "./jumprole_type.js";
 
 export const GET_JUMPROLE_BY_ID = `SELECT * FROM trickjump_jumps WHERE id=$1`;
 export const GET_JUMPROLE_BY_NAME_AND_SERVER = `SELECT * FROM trickjump_jumps WHERE name=$1 AND server=$2`;
@@ -20,9 +20,9 @@ export const DELETE_JUMPROLE_BY_ID = `DELETE FROM trickjump_jumps WHERE id=$1`;
 export const DELETE_JUMPROLE_BY_NAME_AND_SERVER = `DELETE FROM trickjump_jumps WHERE name=$1 AND server=$2`;
 export const INSERT_JUMPROLE = `INSERT INTO trickjump_jumps (name, description, kingdom, location, jump_type, link, added_by, updated_at, server, hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
 
-type Queryable = Pool | PoolClient;
+type Queryable = PG.Pool | PG.PoolClient;
 
-export enum ModifyJumproleResultType {
+export const enum ModifyJumproleResultType {
     InvalidJumproleHandle,
     NoneMatchJumproleHandle,
     InvalidQuery,
@@ -40,16 +40,8 @@ export interface ModifyJumproleResult {
     new: Jumprole | undefined;
 }
 
-export const query_failure = function (
-    function_name: string,
-    query_string: string,
-    query_parameters: any[],
-    err: any,
-): void {
-    log(
-        `${function_name}: unexpectedly failed when attempting query.`,
-        LogType.Error,
-    );
+export const query_failure = function (function_name: string, query_string: string, query_parameters: any[], err: any): void {
+    log(`${function_name}: unexpectedly failed when attempting query.`, LogType.Error);
     log(`Query string:`, LogType.Error);
     log(query_string, LogType.Error);
     log(`Query parameters: `, LogType.Error);
@@ -57,10 +49,7 @@ export const query_failure = function (
     log(safe_serialize(err), LogType.Error);
 };
 
-export const get_jumprole = async (
-    handle: JumproleHandle,
-    queryable: Queryable,
-): Promise<Jumprole | null> => {
+export const get_jumprole = async (handle: JumproleHandle, queryable: Queryable): Promise<Jumprole | null> => {
     const type = check_jumprole_handle(handle);
 
     switch (type) {
@@ -69,9 +58,7 @@ export const get_jumprole = async (
         }
         case JumproleHandleType.ID: {
             try {
-                const result = await queryable.query(GET_JUMPROLE_BY_ID, [
-                    handle as number,
-                ]);
+                const result = await queryable.query(GET_JUMPROLE_BY_ID, [handle as number]);
                 const row_result = result.rowCount;
                 if (row_result > 1) {
                     // Somehow multiple jumps with the same ID, even though it is guaranteed by PostgreSQL to be unique
@@ -89,10 +76,7 @@ export const get_jumprole = async (
                     return null;
                 }
             } catch (error) {
-                log(
-                    `get_jumprole: unexpected error when getting jumprole with ID ${handle.toString()}. Returning null.`,
-                    LogType.Error,
-                );
+                log(`get_jumprole: unexpected error when getting jumprole with ID ${handle.toString()}. Returning null.`, LogType.Error);
                 log(error, LogType.Error);
             }
             return null;
@@ -101,10 +85,7 @@ export const get_jumprole = async (
             const name = (handle as [string, Snowflake])[0];
             const server_id = (handle as [string, Snowflake])[1];
             try {
-                const result = await queryable.query(
-                    GET_JUMPROLE_BY_NAME_AND_SERVER,
-                    [name, server_id],
-                );
+                const result = await queryable.query(GET_JUMPROLE_BY_NAME_AND_SERVER, [name, server_id]);
                 const row_result = result.rowCount;
                 if (row_result > 1) {
                     // Somehow multiple jumps with the same name and server, even though they are guaranteed by PostgreSQL to be unique as a pair
@@ -137,7 +118,7 @@ export const get_jumprole = async (
  * Changes a `Jumprole` object in the PostgreSQL database.
  * @param handle The handle which identifies the `Jumprole` to change
  * @param merger An object which contains the keys to be changed and the values to be changed to.
- * @param queryable The `Pool` or `PoolClient` to make the query using
+ * @param queryable The `PG.Pool` or `PG.PoolClient` to make the query using
  * @returns `ModifyJumproleResult` indicating the result and what the new object is, if it succeeded
  */
 export const modify_jumprole = async function (
@@ -168,10 +149,7 @@ export const modify_jumprole = async function (
     // comes out with all of the keys included in the Jumprole specification,
     // to just the ones which aren't undefined, i.e. they are being specified
     // and should be changed
-    const change_keys = Object.keys(merger_result).filter(
-        (prop_name: string) =>
-            merger_result[prop_name as keyof Jumprole] !== undefined,
-    );
+    const change_keys = Object.keys(merger_result).filter((prop_name: string) => merger_result[prop_name as keyof Jumprole] !== undefined);
 
     // Useful for generating the substitution signatures, i.e. $2, in the
     // database query string
@@ -196,9 +174,7 @@ export const modify_jumprole = async function (
         }
         case JumproleHandleType.NameAndServer: {
             let handle_tuple = handle as [string, string];
-            request_tail = ` WHERE name=$${property_count + 1} AND server=$${
-                property_count + 2
-            }`;
+            request_tail = ` WHERE name=$${property_count + 1} AND server=$${property_count + 2}`;
             query_tail.push(...handle_tuple);
             break;
         }
@@ -219,10 +195,7 @@ export const modify_jumprole = async function (
     // Used to represent a property assignment that will be
     // filled out in the DB query string
     type QueryAssignment = [string, any];
-    const stringify_assignment = function (
-        assignment: QueryAssignment,
-        index: number,
-    ): string {
+    const stringify_assignment = function (assignment: QueryAssignment, index: number): string {
         return `${assignment[0]} = $${index.toString()}`;
     };
 
@@ -237,10 +210,7 @@ export const modify_jumprole = async function (
                 if (name === null || name.length <= 100) {
                     query_assignments.push(["name", name]);
                 } else {
-                    log(
-                        `modify_jumprole: merger had property "name" with length longer than 100. Returning.`,
-                        LogType.Error,
-                    );
+                    log(`modify_jumprole: merger had property "name" with length longer than 100. Returning.`, LogType.Error);
                     return {
                         result_type: ModifyJumproleResultType.NameTooLong,
                         new: undefined,
@@ -253,13 +223,9 @@ export const modify_jumprole = async function (
                 if (description === null || description.length <= 1500) {
                     query_assignments.push(["description", description]);
                 } else {
-                    log(
-                        `modify_jumprole: merger had property "description" with length longer than 1500. Returning.`,
-                        LogType.Error,
-                    );
+                    log(`modify_jumprole: merger had property "description" with length longer than 1500. Returning.`, LogType.Error);
                     return {
-                        result_type:
-                            ModifyJumproleResultType.DescriptionTooLong,
+                        result_type: ModifyJumproleResultType.DescriptionTooLong,
                         new: undefined,
                     };
                 }
@@ -270,10 +236,7 @@ export const modify_jumprole = async function (
                 if (location === null || location.length <= 200) {
                     query_assignments.push(["location", location]);
                 } else {
-                    log(
-                        `modify_jumprole: merger had property "location" with length longer than 200. Returning.`,
-                        LogType.Error,
-                    );
+                    log(`modify_jumprole: merger had property "location" with length longer than 200. Returning.`, LogType.Error);
                     return {
                         result_type: ModifyJumproleResultType.InvalidQuery,
                         new: undefined,
@@ -286,10 +249,7 @@ export const modify_jumprole = async function (
                 if (jump_type === null || jump_type.length <= 200) {
                     query_assignments.push(["jump_type", jump_type]);
                 } else {
-                    log(
-                        `modify_jumprole: merger had property "jump_type" with length longer than 200. Returning.`,
-                        LogType.Error,
-                    );
+                    log(`modify_jumprole: merger had property "jump_type" with length longer than 200. Returning.`, LogType.Error);
                     return {
                         result_type: ModifyJumproleResultType.LocationTooLong,
                         new: undefined,
@@ -302,10 +262,7 @@ export const modify_jumprole = async function (
                 if (link === null || link.length <= 150) {
                     query_assignments.push(["link", link]);
                 } else {
-                    log(
-                        `modify_jumprole: merger had property "link" with length longer than 150. Returning.`,
-                        LogType.Error,
-                    );
+                    log(`modify_jumprole: merger had property "link" with length longer than 150. Returning.`, LogType.Error);
                     return {
                         result_type: ModifyJumproleResultType.LinkTooLong,
                         new: undefined,
@@ -319,10 +276,7 @@ export const modify_jumprole = async function (
                 if (date === null) {
                     query_assignments.push(["updated_at", null]);
                 } else {
-                    query_assignments.push([
-                        "updated_at",
-                        Math.round(date.getTime() / 1000),
-                    ]);
+                    query_assignments.push(["updated_at", Math.round(date.getTime() / 1000)]);
                 }
                 continue;
             }
@@ -332,10 +286,7 @@ export const modify_jumprole = async function (
                 continue;
             }
             default: {
-                query_assignments.push([
-                    change_key,
-                    merger_result[change_key as keyof Jumprole],
-                ]);
+                query_assignments.push([change_key, merger_result[change_key as keyof Jumprole]]);
             }
         }
     }
@@ -360,9 +311,7 @@ export const modify_jumprole = async function (
     query_assignments.push(["hash", hash]);
 
     // Create the part of the query string where we set the properties
-    const request_mid = query_assignments
-        .map((assignment, index) => stringify_assignment(assignment, index))
-        .join(", ");
+    const request_mid = query_assignments.map((assignment, index) => stringify_assignment(assignment, index)).join(", ");
     const query_start = query_assignments.map(assignment => assignment[1]);
 
     const full_request = request_head + request_mid + request_tail;
@@ -382,7 +331,7 @@ export const modify_jumprole = async function (
     }
 };
 
-export enum DeleteJumproleResult {
+export const enum DeleteJumproleResult {
     NoneMatchJumproleHandle,
     InvalidJumproleHandle,
     Success,
@@ -392,21 +341,15 @@ export enum DeleteJumproleResult {
 /**
  *
  * @param handle The handle that refers to the `Jumprole` to delete
- * @param queryable The `Pool` or `PoolClient` used to make the PostgreSQL database query
+ * @param queryable The `PG.Pool` or `PG.PoolClient` used to make the PostgreSQL database query
  * @returns `DeleteJumproleResult` indicating whether the function succeeded and if not, what the problem was
  */
-export const delete_jumprole = async function (
-    handle: JumproleHandle,
-    queryable: Queryable,
-): Promise<DeleteJumproleResult> {
+export const delete_jumprole = async function (handle: JumproleHandle, queryable: Queryable): Promise<DeleteJumproleResult> {
     const type = check_jumprole_handle(handle);
 
     switch (type) {
         case JumproleHandleType.Invalid: {
-            log(
-                `delete_jumprole: invalid Jumprole handle received. Handle argument:`,
-                LogType.Error,
-            );
+            log(`delete_jumprole: invalid Jumprole handle received. Handle argument:`, LogType.Error);
             log(safe_serialize(handle), LogType.Error);
             return DeleteJumproleResult.InvalidJumproleHandle;
         }
@@ -422,12 +365,7 @@ export const delete_jumprole = async function (
                     await queryable.query(query_string, query_params);
                     return DeleteJumproleResult.Success;
                 } catch (err) {
-                    query_failure(
-                        "delete_jumprole",
-                        query_string,
-                        query_params,
-                        err,
-                    );
+                    query_failure("delete_jumprole", query_string, query_params, err);
                     return DeleteJumproleResult.QueryFailed;
                 }
             }
@@ -445,12 +383,7 @@ export const delete_jumprole = async function (
                     await queryable.query(query_string, query_params);
                     return DeleteJumproleResult.Success;
                 } catch (err) {
-                    query_failure(
-                        "delete_jumprole",
-                        query_string,
-                        query_params,
-                        err,
-                    );
+                    query_failure("delete_jumprole", query_string, query_params, err);
                     return DeleteJumproleResult.QueryFailed;
                 }
             }
@@ -458,7 +391,7 @@ export const delete_jumprole = async function (
     }
 };
 
-export enum CreateJumproleResult {
+export const enum CreateJumproleResult {
     InvalidJumproleObject,
     QueryFailed,
     Success,
@@ -474,77 +407,43 @@ export enum CreateJumproleResult {
  * Adds a `Jumprole` object to the database, recomputing its hash and updating its `updated_at` value to the current date.
  * This means the `hash` and `updated_at` properties must still be provided, but they are not used.
  * @param jumprole The `Jumprole` object to add to the database.
- * @param queryable The `Pool` or `PoolClient` used to execute the PostgreSQL database query.
+ * @param queryable The `PG.Pool` or `PG.PoolClient` used to execute the PostgreSQL database query.
  * @returns `CreateJumproleResult` indicating either success or failure, and what the problem was if there was one.
  */
-export const create_jumprole = async function (
-    jumprole: Jumprole,
-    queryable: Queryable,
-): Promise<CreateJumproleResult> {
-    let jumprole_result = check_specification(
-        jumprole,
-        "create_jumprole",
-        JumproleSPECIFICATION,
-    );
+export const create_jumprole = async function (jumprole: Jumprole, queryable: Queryable): Promise<CreateJumproleResult> {
+    let jumprole_result = check_specification(jumprole, "create_jumprole", JumproleSPECIFICATION);
 
     if (jumprole_result === false) {
-        log(
-            `create_jumprole: unexpectedly received non-Jumprole object. Returning appropriate error code.`,
-            LogType.Error,
-        );
+        log(`create_jumprole: unexpectedly received non-Jumprole object. Returning appropriate error code.`, LogType.Error);
         log(`jumprole:`, LogType.Error);
         log(safe_serialize(jumprole), LogType.Error);
         return CreateJumproleResult.InvalidJumproleObject;
     }
 
-    const existing = await get_jumprole(
-        [jumprole_result.name, jumprole_result.server],
-        queryable,
-    );
+    const existing = await get_jumprole([jumprole_result.name, jumprole_result.server], queryable);
 
     if (existing !== null) {
         return CreateJumproleResult.JumproleAlreadyExists;
     }
 
     if (jumprole_result.name.length > 100) {
-        log(
-            `create_jumprole: object had property "name" with length longer than 100. Returning.`,
-            LogType.Error,
-        );
+        log(`create_jumprole: object had property "name" with length longer than 100. Returning.`, LogType.Error);
         return CreateJumproleResult.NameTooLong;
     }
     if (jumprole_result.description.length > 1500) {
-        log(
-            `create_jumprole: object had property "description" with length longer than 1500. Returning.`,
-            LogType.Error,
-        );
+        log(`create_jumprole: object had property "description" with length longer than 1500. Returning.`, LogType.Error);
         return CreateJumproleResult.DescriptionTooLong;
     }
-    if (
-        jumprole_result.location !== null &&
-        jumprole_result.location.length > 200
-    ) {
-        log(
-            `create_jumprole: object had property "location" with length longer than 200. Returning.`,
-            LogType.Error,
-        );
+    if (jumprole_result.location !== null && jumprole_result.location.length > 200) {
+        log(`create_jumprole: object had property "location" with length longer than 200. Returning.`, LogType.Error);
         return CreateJumproleResult.LocationTooLong;
     }
-    if (
-        jumprole_result.jump_type !== null &&
-        jumprole_result.jump_type.length > 200
-    ) {
-        log(
-            `create_jumprole: object had property "jump_type" with length longer than 200. Returning.`,
-            LogType.Error,
-        );
+    if (jumprole_result.jump_type !== null && jumprole_result.jump_type.length > 200) {
+        log(`create_jumprole: object had property "jump_type" with length longer than 200. Returning.`, LogType.Error);
         return CreateJumproleResult.JumpTypeTooLong;
     }
     if (jumprole_result.link !== null && jumprole_result.link.length > 150) {
-        log(
-            `create_jumprole: object had property "link" with length longer than 150. Returning.`,
-            LogType.Error,
-        );
+        log(`create_jumprole: object had property "link" with length longer than 150. Returning.`, LogType.Error);
         return CreateJumproleResult.LinkTooLong;
     }
 

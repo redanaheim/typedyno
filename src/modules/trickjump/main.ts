@@ -1,6 +1,6 @@
-import { Module } from "../../module_loader";
-import { InclusionSpecifierType } from "../../utilities/permissions";
-import { jumprole_cmd } from "./jumprole/internals/jumprole_cmd";
+import { Module } from "../../module_loader.js";
+import { InclusionSpecifierType } from "../../utilities/permissions.js";
+import { JumproleCMD } from "./jumprole/internals/jumprole_cmd.js";
 
 // Main module export object
 const trickjump_module: Module = {
@@ -14,7 +14,7 @@ const trickjump_module: Module = {
             list: ["542766712785862666"],
         },
     },
-    functions: [jumprole_cmd],
+    functions: [JumproleCMD],
 };
 
-module.exports = trickjump_module;
+export default trickjump_module;

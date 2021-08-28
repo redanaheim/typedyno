@@ -1,97 +1,36 @@
 import { Client, Message } from "discord.js";
-import { Pool } from "pg";
-import {
-    BotCommandProcessResults,
-    BotCommandProcessResultType,
-} from "../../../../functions";
-import {
-    get_first_matching_subcommand,
-    handle_GetArgsResult,
-} from "../../../../utilities/argument_processing/arguments";
-import { jumprole_set, manual as jumprole_set_manual } from "../set";
-import { jumprole_update, manual as jumprole_update_manual } from "../update";
-import { jumprole_remove, manual as jumprole_remove_manual } from "../remove";
-import { GetArgsResult } from "../../../../utilities/argument_processing/arguments_types";
+import * as PG from "pg";
 
-export const jumprole_cmd = {
-    command_manual: {
+import { BotCommand, BotCommandProcessResults, BotCommandProcessResultType } from "../../../../functions.js";
+import { JumproleSet } from "../set.js";
+import { JumproleUpdate } from "../update.js";
+import { JumproleRemove } from "../remove.js";
+import { automatic_dispatch, command } from "../../../../module_decorators.js";
+import { DebugLogType, log, LogType } from "../../../../utilities/log.js";
+
+@command()
+export class Jumprole extends BotCommand {
+    constructor() {
+        super(Jumprole.manual, Jumprole.no_use_no_see, Jumprole.permissions);
+    }
+
+    static readonly manual = {
         name: "jumprole",
-        subcommands: [
-            jumprole_set_manual,
-            jumprole_update_manual,
-            jumprole_remove_manual,
-        ],
+        subcommands: [JumproleSet.manual, JumproleUpdate.manual, JumproleRemove.manual],
         description: "Manage Jumproles in the current server.",
-    },
-    hide_when_contradicts_permissions: false,
-    process: async (
-        message: Message,
-        _client: Client,
-        pool: Pool,
-        prefix: string | undefined,
-    ): Promise<BotCommandProcessResults> => {
-        const subcommands = jumprole_cmd.command_manual.subcommands;
-        const [set_manual, update_manual, remove_manual] = subcommands;
+    } as const;
 
-        const manuals = [
-            ["set", set_manual],
-            ["update", update_manual],
-            ["remove", remove_manual],
-        ] as const;
+    static readonly no_use_no_see = false;
 
-        const result = get_first_matching_subcommand(
-            prefix as string,
-            message.content,
-            manuals,
-        );
+    static readonly permissions = undefined;
 
-        if (result === false)
-            return {
-                type: BotCommandProcessResultType.Invalid,
-            } as BotCommandProcessResults;
+    @automatic_dispatch(new JumproleSet(), new JumproleUpdate(), new JumproleRemove())
+    async process(_message: Message, _client: Client, _pool: PG.Pool, _prefix: string | undefined): Promise<BotCommandProcessResults> {
+        // Do before calling subcommand
+        log("jumprole: dispatching command call automatically to subcommand.", LogType.Status, DebugLogType.AutomaticDispatchPassThrough);
+        // Return { type: BotCommandProcessResultType.PassThrough to pass through to the subcommand }
+        return { type: BotCommandProcessResultType.PassThrough };
+    }
+}
 
-        const succeeded = await handle_GetArgsResult(
-            message,
-            result[1],
-            prefix,
-        );
-
-        if (succeeded === false)
-            return {
-                type: BotCommandProcessResultType.Invalid,
-            };
-
-        switch (result[0]) {
-            case "set": {
-                return jumprole_set(
-                    result[1] as GetArgsResult<typeof set_manual.arguments>,
-                    message,
-                    _client,
-                    pool,
-                    prefix,
-                );
-            }
-            case "update": {
-                return jumprole_update(
-                    result[1] as GetArgsResult<typeof update_manual.arguments>,
-                    message,
-                    _client,
-                    pool,
-                    prefix,
-                );
-            }
-            case "remove": {
-                return jumprole_remove(
-                    result[1] as GetArgsResult<typeof remove_manual.arguments>,
-                    message,
-                    _client,
-                    pool,
-                    prefix,
-                );
-            }
-            default: {
-                return { type: BotCommandProcessResultType.Invalid };
-            }
-        }
-    },
-} as const;
+export const JumproleCMD = new Jumprole();

@@ -1,10 +1,10 @@
-import { CommandArgument } from "../command_manual";
-import { GetArgsResult } from "./argument_processing/arguments_types";
-import { log, LogType } from "./log";
-import { is_valid_Snowflake } from "./permissions";
-import { is_string, is_number, is_boolean, safe_serialize } from "./typeutils";
+import { CommandArgument } from "../command_manual.js";
+import { GetArgsResult } from "./argument_processing/arguments_types.js";
+import { DebugLogType, log, LogType } from "./log.js";
+import { is_valid_Snowflake } from "./permissions.js";
+import { is_string, is_number, is_boolean, safe_serialize } from "./typeutils.js";
 
-export enum ParameterTypeCheckResult {
+export const enum ParameterTypeCheckResult {
     InvalidParameterType,
     IncorrectType,
     InvalidValue,
@@ -72,61 +72,16 @@ export const TRANSFORM_TABLE: Record<ParamValueType, BaseParamValueType[]> = {
     [ParamValueType.Number]: [],
     [ParamValueType.Boolean]: [],
     [ParamValueType.NumberLike]: [ParamValueType.String, ParamValueType.Number],
-    [ParamValueType.IntegerLike]: [
-        ParamValueType.String,
-        ParamValueType.Number,
-        ParamValueType.BigInt,
-    ],
-    [ParamValueType.UnsignedIntegerLike]: [
-        ParamValueType.String,
-        ParamValueType.Number,
-        ParamValueType.BigInt,
-    ],
-    [ParamValueType.Snowflake]: [
-        ParamValueType.String,
-        ParamValueType.Snowflake,
-        ParamValueType.BigInt,
-        ParamValueType.UInt8B,
-    ],
-    [ParamValueType.UInt4S]: [
-        ParamValueType.UInt4N,
-        ParamValueType.Number,
-        ParamValueType.BigInt,
-    ],
-    [ParamValueType.UInt4N]: [
-        ParamValueType.Number,
-        ParamValueType.UInt4S,
-        ParamValueType.String,
-        ParamValueType.BigInt,
-    ],
-    [ParamValueType.UInt4Like]: [
-        ParamValueType.UInt4N,
-        ParamValueType.Number,
-        ParamValueType.UInt4S,
-        ParamValueType.String,
-        ParamValueType.BigInt,
-    ],
-    [ParamValueType.DateAsUInt4Like]: [
-        ParamValueType.Date,
-        ParamValueType.UInt4N,
-        ParamValueType.UInt4S,
-    ],
-    [ParamValueType.UInt8S]: [
-        ParamValueType.UInt8B,
-        ParamValueType.String,
-        ParamValueType.Snowflake,
-    ],
-    [ParamValueType.UInt8B]: [
-        ParamValueType.UInt8S,
-        ParamValueType.String,
-        ParamValueType.Snowflake,
-    ],
-    [ParamValueType.UInt8Like]: [
-        ParamValueType.UInt8S,
-        ParamValueType.UInt8B,
-        ParamValueType.String,
-        ParamValueType.Snowflake,
-    ],
+    [ParamValueType.IntegerLike]: [ParamValueType.String, ParamValueType.Number, ParamValueType.BigInt],
+    [ParamValueType.UnsignedIntegerLike]: [ParamValueType.String, ParamValueType.Number, ParamValueType.BigInt],
+    [ParamValueType.Snowflake]: [ParamValueType.String, ParamValueType.Snowflake, ParamValueType.BigInt, ParamValueType.UInt8B],
+    [ParamValueType.UInt4S]: [ParamValueType.UInt4N, ParamValueType.Number, ParamValueType.BigInt],
+    [ParamValueType.UInt4N]: [ParamValueType.Number, ParamValueType.UInt4S, ParamValueType.String, ParamValueType.BigInt],
+    [ParamValueType.UInt4Like]: [ParamValueType.UInt4N, ParamValueType.Number, ParamValueType.UInt4S, ParamValueType.String, ParamValueType.BigInt],
+    [ParamValueType.DateAsUInt4Like]: [ParamValueType.Date, ParamValueType.UInt4N, ParamValueType.UInt4S],
+    [ParamValueType.UInt8S]: [ParamValueType.UInt8B, ParamValueType.String, ParamValueType.Snowflake],
+    [ParamValueType.UInt8B]: [ParamValueType.UInt8S, ParamValueType.String, ParamValueType.Snowflake],
+    [ParamValueType.UInt8Like]: [ParamValueType.UInt8S, ParamValueType.UInt8B, ParamValueType.String, ParamValueType.Snowflake],
     [ParamValueType.BigInt]: [ParamValueType.String],
     [ParamValueType.BigIntLike]: [ParamValueType.String, ParamValueType.BigInt],
     [ParamValueType.Date]: [ParamValueType.UInt4N, ParamValueType.UInt4S],
@@ -154,49 +109,34 @@ export interface Parameter {
     must_equal?: any;
 }
 
-enum ParamTypeValidationResult {
+const enum ParamTypeValidationResult {
     Invalid = 0,
     Optional,
     Value,
 }
 
-export type NormalizedParameterValue =
-    | string
-    | number
-    | boolean
-    | bigint
-    | Date
-    | null;
+export type NormalizedParameterValue = string | number | boolean | bigint | Date | null;
 
 export interface ParameterValidationResult {
     type_check: ParameterTypeCheckResult;
     normalized_value?: NormalizedParameterValue;
 }
 
-export const is_ParamValueType = function (
-    object: any,
-): object is ParamValueType {
+export const is_ParamValueType = function (object: any): object is ParamValueType {
     return Object.values(ParamValueType).includes(object);
 };
 
-export const validate_ParamType = function (
-    object?: unknown,
-): ParamTypeValidationResult {
+export const validate_ParamType = function (object?: unknown): ParamTypeValidationResult {
     if (typeof object !== "string") {
         if (typeof object !== "object") {
             return ParamTypeValidationResult.Invalid;
-        } else if (
-            object === null ||
-            ("type" in object &&
-                "accepts_null" in object &&
-                "accepts_undefined") === false
-        ) {
+        } else if (object === null || ("value" in object && "accepts_null" in object && "accepts_undefined" in object) === false) {
             return ParamTypeValidationResult.Invalid;
         } else if (
             // I did the check up there! stupid TypeScript compiler
             // { ts-malfunction }
             // @ts-expect-error
-            is_ParamValueType(object.type) &&
+            is_ParamValueType(object.value) &&
             // @ts-expect-error
             is_boolean(object.accepts_null) &&
             // @ts-expect-error
@@ -215,36 +155,22 @@ export const validate_ParamType = function (
     }
 };
 
-export const meets_not_required_condition = function (
-    body: any,
-    not_required_condition?: NotRequiredCondition,
-) {
-    if (
-        not_required_condition instanceof Object === false ||
-        not_required_condition === undefined
-    ) {
+export const meets_not_required_condition = function (body: any, not_required_condition?: NotRequiredCondition) {
+    if (not_required_condition instanceof Object === false || not_required_condition === undefined) {
         return false;
     } else {
         if (is_string(not_required_condition?.property)) {
-            return (
-                body[not_required_condition.property] ===
-                not_required_condition.equals
-            );
+            return body[not_required_condition.property] === not_required_condition.equals;
         } else {
             return false;
         }
     }
 };
 
-export const validate_parameter = function (
-    property: unknown,
-    type: ParamType,
-): ParameterValidationResult {
+export const validate_parameter = function (property: unknown, type: ParamType): ParameterValidationResult {
     const type_classification = validate_ParamType(type);
 
-    const value = (
-        val: NormalizedParameterValue,
-    ): ParameterValidationResult => {
+    const value = (val: NormalizedParameterValue): ParameterValidationResult => {
         return {
             type_check: ParameterTypeCheckResult.Correct,
             normalized_value: val,
@@ -293,8 +219,7 @@ export const validate_parameter = function (
                 }
                 case ParamValueType.Snowflake: {
                     if (is_string(property) === false) return bad_type;
-                    else if (is_valid_Snowflake(property))
-                        return value((property as string).toString());
+                    else if (is_valid_Snowflake(property)) return value((property as string).toString());
                     else return bad_value;
                 }
                 case ParamValueType.Number: {
@@ -304,16 +229,11 @@ export const validate_parameter = function (
                 case ParamValueType.NumberLike: {
                     if (is_number(property)) return value(property);
                     else if (typeof property === "bigint") {
-                        if (
-                            property <= Number.MAX_SAFE_INTEGER &&
-                            property >= Number.MIN_SAFE_INTEGER
-                        )
-                            return value(Number(property));
+                        if (property <= Number.MAX_SAFE_INTEGER && property >= Number.MIN_SAFE_INTEGER) return value(Number(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         const converted = Number(property);
-                        if (isNaN(converted) === false && isFinite(converted))
-                            return value(converted);
+                        if (isNaN(converted) === false && isFinite(converted)) return value(converted);
                         else return bad_value;
                     } else return bad_type;
                 }
@@ -322,106 +242,63 @@ export const validate_parameter = function (
                         if (Number.isInteger(property)) return value(property);
                         else return bad_value;
                     } else if (typeof property === "bigint") {
-                        if (
-                            property <= Number.MAX_SAFE_INTEGER &&
-                            property >= Number.MIN_SAFE_INTEGER
-                        )
-                            return value(Number(property));
+                        if (property <= Number.MAX_SAFE_INTEGER && property >= Number.MIN_SAFE_INTEGER) return value(Number(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         const converted = Number(property);
-                        if (Number.isInteger(converted))
-                            return value(converted);
+                        if (Number.isInteger(converted)) return value(converted);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.UnsignedIntegerLike: {
                     if (is_number(property)) {
-                        if (Number.isSafeInteger(property) && property >= 0)
-                            return value(property);
+                        if (Number.isSafeInteger(property) && property >= 0) return value(property);
                         else return bad_value;
                     } else if (typeof property === "bigint") {
-                        if (
-                            property >= 0n &&
-                            property <= Number.MAX_SAFE_INTEGER
-                        )
-                            return value(Number(property));
+                        if (property >= 0n && property <= Number.MAX_SAFE_INTEGER) return value(Number(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         const converted = Number(property);
-                        if (Number.isSafeInteger(converted) && converted >= 0)
-                            return value(converted);
+                        if (Number.isSafeInteger(converted) && converted >= 0) return value(converted);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.UInt4N: {
                     if (is_number(property)) {
-                        if (
-                            Number.isInteger(property) &&
-                            property >= 0 &&
-                            property < UINT4
-                        )
-                            return value(property);
+                        if (Number.isInteger(property) && property >= 0 && property < UINT4) return value(property);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.UInt4S: {
                     if (is_string(property)) {
                         const converted = Number(property);
-                        if (
-                            Number.isInteger(converted) &&
-                            converted >= 0 &&
-                            converted < UINT4
-                        )
-                            return value(converted);
+                        if (Number.isInteger(converted) && converted >= 0 && converted < UINT4) return value(converted);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.UInt4Like: {
                     if (is_number(property)) {
-                        if (
-                            Number.isInteger(property) &&
-                            property >= 0 &&
-                            property < UINT4
-                        )
-                            return value(property);
+                        if (Number.isInteger(property) && property >= 0 && property < UINT4) return value(property);
                         else return bad_value;
                     } else if (typeof property === "bigint") {
-                        if (property <= UINT4 && property >= 0)
-                            return value(Number(property));
+                        if (property <= UINT4 && property >= 0) return value(Number(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         const converted = Number(property);
-                        if (
-                            Number.isInteger(converted) &&
-                            converted >= 0 &&
-                            converted < UINT4
-                        )
-                            return value(converted);
+                        if (Number.isInteger(converted) && converted >= 0 && converted < UINT4) return value(converted);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.DateAsUInt4Like: {
                     if (is_number(property)) {
-                        if (
-                            Number.isInteger(property) &&
-                            property >= 0 &&
-                            property < UINT4
-                        )
-                            return value(new Date(property * 1000));
+                        if (Number.isInteger(property) && property >= 0 && property < UINT4) return value(new Date(property * 1000));
                         else return bad_value;
                     } else if (typeof property === "bigint") {
-                        if (property <= UINT4 && property >= 0)
-                            return value(new Date(Number(property) * 1000));
+                        if (property <= UINT4 && property >= 0) return value(new Date(Number(property) * 1000));
                         else return bad_value;
                     } else if (is_string(property)) {
                         const converted = Number(property);
-                        if (
-                            Number.isInteger(converted) &&
-                            converted >= 0 &&
-                            converted < UINT4
-                        )
-                            return value(new Date(converted * 1000));
+                        if (Number.isInteger(converted) && converted >= 0 && converted < UINT4) return value(new Date(converted * 1000));
                         else return bad_value;
                     } else return bad_type;
                 }
@@ -429,8 +306,7 @@ export const validate_parameter = function (
                     if (is_string(property)) {
                         try {
                             const converted = BigInt(property);
-                            if (converted >= 0n && converted < UINT8)
-                                return value(converted);
+                            if (converted >= 0n && converted < UINT8) return value(converted);
                             else return bad_value;
                         } catch (err) {
                             return bad_value;
@@ -439,31 +315,21 @@ export const validate_parameter = function (
                 }
                 case ParamValueType.UInt8B: {
                     if (typeof property === "bigint") {
-                        if (
-                            (property as bigint) >= 0n &&
-                            (property as bigint) < UINT8
-                        )
-                            return value(property);
+                        if ((property as bigint) >= 0n && (property as bigint) < UINT8) return value(property);
                         else return bad_value;
                     } else return bad_type;
                 }
                 case ParamValueType.UInt8Like: {
                     if (typeof property === "bigint") {
-                        if (
-                            (property as bigint) >= 0n &&
-                            (property as bigint) < UINT8
-                        )
-                            return value(property);
+                        if ((property as bigint) >= 0n && (property as bigint) < UINT8) return value(property);
                         else return bad_value;
                     } else if (is_number(property)) {
-                        if (Number.isSafeInteger(property) && property >= 0)
-                            return value(BigInt(property));
+                        if (Number.isSafeInteger(property) && property >= 0) return value(BigInt(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         try {
                             const converted = BigInt(property);
-                            if (converted >= 0n && converted < UINT8)
-                                return value(converted);
+                            if (converted >= 0n && converted < UINT8) return value(converted);
                             else return bad_value;
                         } catch (err) {
                             return bad_value;
@@ -478,8 +344,7 @@ export const validate_parameter = function (
                     if (typeof property === "bigint") {
                         return value(property);
                     } else if (is_number(property)) {
-                        if (Number.isSafeInteger(property))
-                            return value(BigInt(property));
+                        if (Number.isSafeInteger(property)) return value(BigInt(property));
                         else return bad_value;
                     } else if (is_string(property)) {
                         try {
@@ -496,23 +361,20 @@ export const validate_parameter = function (
                 }
                 case ParamValueType.KingdomIndexN: {
                     if (is_number(property)) {
-                        if (Number.isInteger(property) && property < 19)
-                            return value(property);
+                        if (Number.isInteger(property) && property < 19) return value(property);
                         else return bad_value;
                     } else return bad_value;
                 }
                 case ParamValueType.KingdomIndexS: {
                     if (is_string(property)) {
                         const converted = Number(property);
-                        if (Number.isInteger(converted) && converted < 19)
-                            return value(converted);
+                        if (Number.isInteger(converted) && converted < 19) return value(converted);
                         else return bad_value;
                     } else return bad_value;
                 }
                 default: {
                     return {
-                        type_check:
-                            ParameterTypeCheckResult.InvalidParameterType,
+                        type_check: ParameterTypeCheckResult.InvalidParameterType,
                     };
                 }
             }
@@ -538,9 +400,9 @@ export const require_properties = function (
     ...properties: Parameter[]
 ): Record<string, NormalizedParameterValue> | false {
     if (properties.length < 1) {
-        return false;
+        return Object.keys(object).length === 0 ? {} : false;
     } else if (!object) {
-        log(`require_properties: missing object entirely!`, LogType.Status);
+        log(`require_properties: missing object entirely!`, LogType.Status, DebugLogType.RequirePropertiesFunctionDebug);
         return false;
     }
 
@@ -549,25 +411,15 @@ export const require_properties = function (
     let record: Record<string, NormalizedParameterValue> = {};
 
     for (const required_param of properties) {
-        if (
-            meets_not_required_condition(
-                object,
-                required_param.not_required_condition,
-            ) === false
-        ) {
-            if (
-                !!required_param.must_equal &&
-                required_param.must_equal !== object[required_param.name]
-            ) {
+        if (meets_not_required_condition(object, required_param.not_required_condition) === false) {
+            if (!!required_param.must_equal && required_param.must_equal !== object[required_param.name]) {
                 log(
                     `${function_name}: require_properties - incorrect value for ${required_param.type} parameter ${required_param.name} - body does not have correct value.`,
                     LogType.Status,
+                    DebugLogType.RequirePropertiesFunctionDebug,
                 );
                 has_all_required = false;
-            } else if (
-                !!required_param.must_equal &&
-                required_param.must_equal === object[required_param.name]
-            ) {
+            } else if (!!required_param.must_equal && required_param.must_equal === object[required_param.name]) {
                 record[required_param.name] = required_param.must_equal;
             } else {
                 const value = object[required_param.name];
@@ -580,9 +432,7 @@ export const require_properties = function (
                                 LogType.Mismatch,
                             );
                             return false;
-                        } else
-                            record[required_param.name] =
-                                result.normalized_value;
+                        } else record[required_param.name] = result.normalized_value;
                         continue;
                     }
                     case ParameterTypeCheckResult.InvalidParameterType: {
@@ -604,39 +454,31 @@ export const require_properties = function (
                             case ParamTypeValidationResult.Optional: {
                                 // Spaghetti code but its ok
                                 const accepts = [
-                                    (required_param.type as OptionalParamType)
-                                        .accepts_null,
-                                    (required_param.type as OptionalParamType)
-                                        .accepts_undefined,
+                                    (required_param.type as OptionalParamType).accepts_null,
+                                    (required_param.type as OptionalParamType).accepts_undefined,
                                 ]
-                                    .map((val, index) =>
-                                        val
-                                            ? ["null", "undefined"][index]
-                                            : false,
-                                    )
+                                    .map((val, index) => (val ? ["null", "undefined"][index] : false))
                                     .filter(val => val !== false)
                                     .join(" and ");
                                 log(
                                     `${function_name}: require_properties - incorrect type for optional ${
                                         required_param.type
-                                    } (also accepts ${accepts}) property of type ${
-                                        required_param.type
-                                    } named ${
+                                    } (also accepts ${accepts}) property of type ${required_param.type} named ${
                                         required_param.name
                                     } - got ${typeof value} from body`,
                                     LogType.Status,
+                                    DebugLogType.RequirePropertiesFunctionDebug,
                                 );
                                 has_all_required = false;
                                 continue;
                             }
                             case ParamTypeValidationResult.Value: {
                                 log(
-                                    `${function_name}: require_properties - incorrect type for property of type ${
-                                        required_param.type
-                                    } named ${
+                                    `${function_name}: require_properties - incorrect type for property of type ${required_param.type} named ${
                                         required_param.name
                                     } - got ${typeof value} from body`,
                                     LogType.Status,
+                                    DebugLogType.RequirePropertiesFunctionDebug,
                                 );
                                 has_all_required = false;
                                 continue;
@@ -654,37 +496,29 @@ export const require_properties = function (
                             }
                             case ParamTypeValidationResult.Optional: {
                                 const accepts = [
-                                    (required_param.type as OptionalParamType)
-                                        .accepts_null,
-                                    (required_param.type as OptionalParamType)
-                                        .accepts_undefined,
+                                    (required_param.type as OptionalParamType).accepts_null,
+                                    (required_param.type as OptionalParamType).accepts_undefined,
                                 ]
-                                    .map((val, index) =>
-                                        val
-                                            ? ["null", "undefined"][index]
-                                            : false,
-                                    )
+                                    .map((val, index) => (val ? ["null", "undefined"][index] : false))
                                     .filter(val => val !== false)
                                     .join(" and ");
                                 log(
                                     `${function_name}: require_properties - incorrect value for optional ${
                                         required_param.type
-                                    } (also accepts ${accepts}) property ${
-                                        required_param.name
-                                    } - got ${safe_serialize(value)} from body`,
+                                    } (also accepts ${accepts}) property ${required_param.name} - got ${safe_serialize(value)} from body`,
                                     LogType.Status,
+                                    DebugLogType.RequirePropertiesFunctionDebug,
                                 );
                                 has_all_required = false;
                                 continue;
                             }
                             case ParamTypeValidationResult.Value: {
                                 log(
-                                    `${function_name}: require_properties - incorrect value for ${
-                                        required_param.type
-                                    } property ${
+                                    `${function_name}: require_properties - incorrect value for ${required_param.type} property ${
                                         required_param.name
                                     } - got ${safe_serialize(value)} from body`,
                                     LogType.Status,
+                                    DebugLogType.RequirePropertiesFunctionDebug,
                                 );
                                 has_all_required = false;
                                 continue;
@@ -696,6 +530,8 @@ export const require_properties = function (
         } else {
             log(
                 `${function_name}: require_properties - property ${required_param.name} of type ${required_param.type} may or may not have been present, but it is not required due to body meeting the not-required condition.`,
+                LogType.Status,
+                DebugLogType.RequirePropertiesFunctionDebug,
             );
         }
     }
@@ -707,20 +543,14 @@ export const require_properties = function (
     }
 };
 
-type Mutable<Spec extends Specification<any>> = Spec extends Specification<
-    infer _T
->
-    ? Parameter[]
-    : never;
+type Mutable<Spec extends Specification<any>> = Spec extends Specification<infer _T> ? Parameter[] : never;
 
 /**
  * Modifies a `Specification` object of a Partial of its original type
  * @param specification The original `Specification` object
  * @returns A new `Specification` object with all of its parameters set to accept undefined as well as the original type
  */
-export const PartialSpecification = function <T>(
-    specification: Specification<T>,
-): Specification<Partial<T>> {
+export const PartialSpecification = function <T>(specification: Specification<T>): Specification<Partial<T>> {
     let new_specification: Mutable<Specification<Partial<T>>> = [];
     for (const parameter of specification) {
         const parameter_type = validate_ParamType(parameter.type);
@@ -728,9 +558,7 @@ export const PartialSpecification = function <T>(
         switch (parameter_type) {
             case ParamTypeValidationResult.Invalid: {
                 log(
-                    `PartialSpecification: invalid Parameter element of specification - name "${
-                        parameter.name
-                    }" has type "${safe_serialize(
+                    `PartialSpecification: invalid Parameter element of specification - name "${parameter.name}" has type "${safe_serialize(
                         parameter.type,
                     )}". Ignoring parameter.`,
                     LogType.Error,
@@ -740,9 +568,7 @@ export const PartialSpecification = function <T>(
             case ParamTypeValidationResult.Optional: {
                 let type = parameter.type as OptionalParamType;
                 if (type.accepts_undefined) {
-                    log(
-                        `PartialSpecification: parameter with name "${parameter.name}" already is an optional that accepts undefined. Adding as is.`,
-                    );
+                    log(`PartialSpecification: parameter with name "${parameter.name}" already is an optional that accepts undefined. Adding as is.`);
                     new_specification.push(parameter);
                 } else {
                     let new_type = type;
@@ -771,14 +597,10 @@ export const PartialSpecification = function <T>(
     return new_specification as Specification<Partial<T>>;
 };
 
-export const check_specification = function <T>(
-    object: any,
-    function_name: string,
-    specification: Specification<T>,
-): T | false {
+export const check_specification = function <T>(object: any, function_name: string, specification: Specification<T>): T | false {
     const result = require_properties(object, function_name, ...specification);
 
-    // Assume the specification is correct. If it isn't, we will have a different return type than stated.
+    // Assume the specification is correct. If it isn't, we will have a different return type then stated.
     return result as T | false;
 };
 
@@ -788,10 +610,7 @@ export const check_specification = function <T>(
  * @param specification The `Specification` used to decide whether to include a property name
  * @returns The list of property names in the original list which are also represented as parameters in the `Specification`
  */
-export const property_filter = function <T>(
-    names: string[],
-    specification: Specification<T>,
-): string[] {
+export const property_filter = function <T>(names: string[], specification: Specification<T>): string[] {
     let new_names = [];
 
     for (const name of names) {
@@ -805,9 +624,9 @@ export const property_filter = function <T>(
     return new_names;
 };
 
-export const argument_specification_from_manual = function <
-    T extends readonly CommandArgument[],
->(manual_args: T): Specification<GetArgsResult<typeof manual_args>["values"]> {
+export const argument_specification_from_manual = function <T extends readonly CommandArgument[]>(
+    manual_args: T,
+): Specification<GetArgsResult<typeof manual_args>["values"]> {
     let res: Parameter[] = [];
     for (const arg of manual_args) {
         let partial: Partial<Parameter> = { name: arg.name };

@@ -1,16 +1,12 @@
 import { Message } from "discord.js";
-import {
-    CommandArgument,
-    SimpleCommandManual,
-    SubcommandManual,
-} from "../../command_manual";
-import { MAINTAINER_TAG } from "../../main";
-import { log, LogType } from "../log";
-import { escape_reg_exp, is_string } from "../typeutils";
+import { CommandArgument, SimpleCommandManual, SubcommandManual } from "../../command_manual.js";
+import { MAINTAINER_TAG } from "../../main.js";
+import { log, LogType } from "../log.js";
+import { escape_reg_exp, is_string } from "../typeutils.js";
 import {
     ContainedArgumentsList,
     ContainedSubcommandNames,
-    GetArgsResult,
+    GetArgsResult as ArgumentValues,
     InvalidSyntaxStringReason,
     is_alphabetic,
     is_digit,
@@ -18,7 +14,7 @@ import {
     SyntaxStringParserState,
     SyntaxStringSegmentContent,
     SyntaxStringSegmentType,
-} from "./arguments_types";
+} from "./arguments_types.js";
 
 /**
  * Transforms `str`, parsed as part of a syntax string, into an array of its parts that is transformable into a `RegExp` by `syntax_string_to_argument_regex`.
@@ -40,8 +36,6 @@ export const parse_loop_with_initial_state = function (
     top_level_call: boolean,
     argument_references: boolean[],
 ): [SyntaxStringSegmentContent[] | InvalidSyntaxStringReason, number] {
-    const State = SyntaxStringParserState;
-
     let res: SyntaxStringSegmentContent[] = [];
 
     let current_segment = "";
@@ -59,20 +53,16 @@ export const parse_loop_with_initial_state = function (
     for (let index = 0; index < to_parse.length; index++) {
         const char = to_parse[index];
         switch (state) {
-            case State.None: {
-                if (char !== "<")
-                    return [
-                        InvalidSyntaxStringReason.DoesNotStartWithPrefixTag,
-                        index,
-                    ];
-                state = State.PrefixTag;
+            case SyntaxStringParserState.None: {
+                if (char !== "<") return [InvalidSyntaxStringReason.DoesNotStartWithPrefixTag, index];
+                state = SyntaxStringParserState.PrefixTag;
                 current_segment = "";
                 break;
             }
-            case State.PrefixTag: {
+            case SyntaxStringParserState.PrefixTag: {
                 if (char !== ">") current_segment += char.toLowerCase();
                 else if (current_segment === "prefix") {
-                    state = State.StaticTopLevel;
+                    state = SyntaxStringParserState.StaticTopLevel;
                     current_segment = "";
                     res.push({
                         content: [],
@@ -82,23 +72,13 @@ export const parse_loop_with_initial_state = function (
 
                     // ignore coming whitespace
                     while (is_whitespace(to_parse[index + 1])) index++;
-                } else
-                    return [
-                        InvalidSyntaxStringReason.InvalidPrefixTagContent,
-                        index,
-                    ];
+                } else return [InvalidSyntaxStringReason.InvalidPrefixTagContent, index];
                 break;
             }
-            case State.StaticTopLevel: {
+            case SyntaxStringParserState.StaticTopLevel: {
                 if (top_level_validated === false && top_level_call) {
-                    if (
-                        is_alphabetic(char) === false &&
-                        is_whitespace(char) === false
-                    )
-                        return [
-                            InvalidSyntaxStringReason.CommandNameDoesNotImmediatelyFollowPrefixTag,
-                            index,
-                        ];
+                    if (is_alphabetic(char) === false && is_whitespace(char) === false)
+                        return [InvalidSyntaxStringReason.CommandNameDoesNotImmediatelyFollowPrefixTag, index];
                     else if (is_alphabetic(char)) {
                         current_segment += char;
                         top_level_validated = true;
@@ -107,10 +87,10 @@ export const parse_loop_with_initial_state = function (
                     } else void 0;
                 } else {
                     if (char === "$") {
-                        state = State.ArgumentIdentifier;
+                        state = SyntaxStringParserState.ArgumentIdentifier;
                         break;
                     } else if (char === "{") {
-                        state = State.KeyOffInCurlyBraces;
+                        state = SyntaxStringParserState.KeyOffInCurlyBraces;
                         just_referred_to_argument = false;
                     } else if (char === "]" && top_level_call === false) {
                         res.push(current_segment);
@@ -122,134 +102,75 @@ export const parse_loop_with_initial_state = function (
                 }
                 break;
             }
-            case State.KeyOffInCurlyBraces: {
+            case SyntaxStringParserState.KeyOffInCurlyBraces: {
                 // { o p T $7 }[...]
                 //  ^           ^
-                //  | we start  | we hand off to State.KeyOffInSquareBrackets
+                //  | we start  | we hand off to SyntaxStringParserState.KeyOffInSquareBrackets
                 //  | here      | here
                 if (is_whitespace(char)) continue;
                 else if (char === "}") {
                     while (is_whitespace(to_parse[index + 1])) index++; // ignore whitespace
                     if (to_parse[index + 1] !== "[")
-                        return [
-                            InvalidSyntaxStringReason.InvalidContentInBetweenKeyOffCurlyBracesAndSquareBrackets,
-                            index,
-                        ];
+                        return [InvalidSyntaxStringReason.InvalidContentInBetweenKeyOffCurlyBracesAndSquareBrackets, index];
                     else if (current_argument_identifier !== null) {
-                        state = State.ContentInKeyOffInSquareBrackets;
+                        state = SyntaxStringParserState.ContentInKeyOffInSquareBrackets;
                         auxiliary_segment = "";
                         index++;
                     }
-                } else if (is_alphabetic(char))
-                    auxiliary_segment += char.toLowerCase();
+                } else if (is_alphabetic(char)) auxiliary_segment += char.toLowerCase();
                 else if (char === "$" && auxiliary_segment === "opt") {
                     argument_identifier_segment = "";
-                    state = State.ArgumentIdentifierInKeyOffInCurlyBraces;
-                } else
-                    return [
-                        InvalidSyntaxStringReason.InvalidContentInKeyOffCurlyBraces,
-                        index,
-                    ];
+                    state = SyntaxStringParserState.ArgumentIdentifierInKeyOffInCurlyBraces;
+                } else return [InvalidSyntaxStringReason.InvalidContentInKeyOffCurlyBraces, index];
                 break;
             }
-            case State.ArgumentIdentifierInKeyOffInCurlyBraces: {
+            case SyntaxStringParserState.ArgumentIdentifierInKeyOffInCurlyBraces: {
                 // { o p T $7616361 }[...]
                 //          ^      ^
-                // we start |      | we hand off to State.KeyOffInCurlyBraces
+                // we start |      | we hand off to SyntaxStringParserState.KeyOffInCurlyBraces
                 // here  -> |      | <-   here
                 if (is_digit(char)) argument_identifier_segment += char;
-                else if (
-                    is_whitespace(char) &&
-                    argument_identifier_segment.length === 0
-                )
-                    continue;
+                else if (is_whitespace(char) && argument_identifier_segment.length === 0) continue;
                 // ignore whitespace in between dollar sign and digits
                 else {
                     if (argument_identifier_segment.length > 0) {
                         // we have at least one valid digit in here
-                        state = State.KeyOffInCurlyBraces;
-                        const argument_number = Number(
-                            argument_identifier_segment,
-                        );
-                        if (
-                            Number.isInteger(argument_number) === false ||
-                            argument_number < 1
-                        )
-                            return [
-                                InvalidSyntaxStringReason.InvalidContentInBetweenKeyOffCurlyBracesAndSquareBrackets,
-                                index,
-                            ];
+                        state = SyntaxStringParserState.KeyOffInCurlyBraces;
+                        const argument_number = Number(argument_identifier_segment);
+                        if (Number.isInteger(argument_number) === false || argument_number < 1)
+                            return [InvalidSyntaxStringReason.InvalidContentInBetweenKeyOffCurlyBracesAndSquareBrackets, index];
                         if (argument_number - 1 >= argument_references.length)
-                            return [
-                                InvalidSyntaxStringReason.NonexistentArgumentReferenced,
-                                index,
-                            ];
+                            return [InvalidSyntaxStringReason.NonexistentArgumentReferenced, index];
                         if (args[argument_number - 1].optional === false)
-                            return [
-                                InvalidSyntaxStringReason.KeyOffArgumentIdentifierRefersToNonOptionalArgument,
-                                index,
-                            ];
-                        current_argument_identifier = Number(
-                            argument_identifier_segment,
-                        );
-                        index -= 1; // so that State.KeyOffInCurlyBraces case reads this character, in order to judge if it's a valid end character
+                            return [InvalidSyntaxStringReason.KeyOffArgumentIdentifierRefersToNonOptionalArgument, index];
+                        current_argument_identifier = Number(argument_identifier_segment);
+                        index -= 1; // so that SyntaxStringParserState.KeyOffInCurlyBraces case reads this character, in order to judge if it's a valid end character
                         argument_identifier_segment = "";
-                    } else
-                        return [
-                            InvalidSyntaxStringReason.InvalidContentInKeyOffCurlyBraces,
-                            index,
-                        ]; // we have nothing valid in here and the string has ended
+                    } else return [InvalidSyntaxStringReason.InvalidContentInKeyOffCurlyBraces, index]; // we have nothing valid in here and the string has ended
                 }
                 break;
             }
-            case State.ArgumentIdentifier: {
+            case SyntaxStringParserState.ArgumentIdentifier: {
                 possible_argument_identifier_full_segment += char;
                 if (is_digit(char)) argument_identifier_segment += char;
-                else if (
-                    is_whitespace(char) &&
-                    argument_identifier_segment.length === 0
-                )
-                    continue;
+                else if (is_whitespace(char) && argument_identifier_segment.length === 0) continue;
                 // ignore whitespace in between dollar sign and digits
                 else {
                     if (argument_identifier_segment.length > 0) {
                         // we have at least one valid digit in here
                         if (just_referred_to_argument) {
-                            return [
-                                InvalidSyntaxStringReason.MultipleArgumentsReferredToByIdentifierWithoutSeparatingCharacters,
-                                index,
-                            ];
+                            return [InvalidSyntaxStringReason.MultipleArgumentsReferredToByIdentifierWithoutSeparatingCharacters, index];
                         }
-                        const argument_number = Number(
-                            argument_identifier_segment,
-                        );
-                        if (
-                            Number.isInteger(argument_number) === false ||
-                            argument_number < 1
-                        )
-                            return [
-                                InvalidSyntaxStringReason.IllegalArgumentIdentifier,
-                                index,
-                            ];
+                        const argument_number = Number(argument_identifier_segment);
+                        if (Number.isInteger(argument_number) === false || argument_number < 1)
+                            return [InvalidSyntaxStringReason.IllegalArgumentIdentifier, index];
                         if (argument_number - 1 >= argument_references.length)
-                            return [
-                                InvalidSyntaxStringReason.NonexistentArgumentReferenced,
-                                index,
-                            ];
+                            return [InvalidSyntaxStringReason.NonexistentArgumentReferenced, index];
                         if (argument_references[argument_number - 1] !== false)
-                            return [
-                                InvalidSyntaxStringReason.ArgumentReferencedMoreThanOnce,
-                                index,
-                            ];
+                            return [InvalidSyntaxStringReason.ArgumentReferencedMoreThanOnce, index];
                         // if we're referencing an optional arg outside its keyoff scope
-                        if (
-                            key_off_stack.includes(argument_number) === false &&
-                            args[argument_number - 1].optional
-                        ) {
-                            return [
-                                InvalidSyntaxStringReason.OptionalArgumentReferredToByIdentifierOutsideItsKeyOff,
-                                index,
-                            ];
+                        if (key_off_stack.includes(argument_number) === false && args[argument_number - 1].optional) {
+                            return [InvalidSyntaxStringReason.OptionalArgumentReferredToByIdentifierOutsideItsKeyOff, index];
                         }
                         res.push(current_segment);
                         argument_references[argument_number - 1] = true;
@@ -261,32 +182,31 @@ export const parse_loop_with_initial_state = function (
                         });
                         argument_identifier_segment = "";
                         possible_argument_identifier_full_segment = "";
-                        state = State.StaticTopLevel;
+                        state = SyntaxStringParserState.StaticTopLevel;
                         index--; // give the top level thing a chance to look at our ending character
                         just_referred_to_argument = true;
                     } else {
                         argument_identifier_segment = "";
                         current_segment += `$${possible_argument_identifier_full_segment}`;
                         possible_argument_identifier_full_segment = "";
-                        state = State.StaticTopLevel;
+                        state = SyntaxStringParserState.StaticTopLevel;
                     } // we have nothing valid in here and the string has ended
                 }
                 break;
             }
-            case State.ContentInKeyOffInSquareBrackets: {
+            case SyntaxStringParserState.ContentInKeyOffInSquareBrackets: {
                 key_off_stack.push(current_argument_identifier as number);
                 const sub_res = parse_loop_with_initial_state(
                     args,
                     to_parse.substring(index),
-                    State.StaticTopLevel,
+                    SyntaxStringParserState.StaticTopLevel,
                     key_off_stack,
                     false,
                     argument_references,
                 );
                 const return_val = sub_res[0];
                 const sub_index = sub_res[1];
-                if (typeof return_val === "number")
-                    return [return_val, index + sub_index];
+                if (typeof return_val === "number") return [return_val, index + sub_index];
                 else {
                     res.push(current_segment);
                     current_segment = "";
@@ -298,7 +218,7 @@ export const parse_loop_with_initial_state = function (
                     index += sub_index;
                     current_argument_identifier = null;
                     key_off_stack.pop();
-                    state = State.StaticTopLevel;
+                    state = SyntaxStringParserState.StaticTopLevel;
                 }
                 break;
             }
@@ -330,24 +250,14 @@ export const syntax_string_to_argument_regex = function (
     args: readonly CommandArgument[],
     syntax_string: string,
 ): [RegExp, { [key: number]: number }] | [InvalidSyntaxStringReason, number] {
-    if (
-        prefix in syntax_string_compile_cache &&
-        syntax_string in syntax_string_compile_cache[prefix]
-    ) {
+    if (prefix in syntax_string_compile_cache && syntax_string in syntax_string_compile_cache[prefix]) {
         return syntax_string_compile_cache[prefix][syntax_string];
     }
     let key_off_stack: number[] = [];
     let argument_references: boolean[] = args.length > 0 ? [false] : [];
     for (let i = 1; i < args.length; i++) argument_references.push(false);
 
-    const result = parse_loop_with_initial_state(
-        args,
-        syntax_string,
-        SyntaxStringParserState.None,
-        key_off_stack,
-        true,
-        argument_references,
-    );
+    const result = parse_loop_with_initial_state(args, syntax_string, SyntaxStringParserState.None, key_off_stack, true, argument_references);
     const parsing_result = result[0];
     if (typeof parsing_result === "number") return [parsing_result, result[1]];
 
@@ -362,35 +272,20 @@ export const syntax_string_to_argument_regex = function (
                     break;
                 }
                 case SyntaxStringSegmentType.KeyOffStatement: {
-                    if (
-                        (part.argument_number as number) in
-                        argument_keyoff_accumulator
-                    )
-                        argument_keyoff_accumulator[
-                            part.argument_number as number
-                        ]++;
-                    else
-                        argument_keyoff_accumulator[
-                            part.argument_number as number
-                        ] = 1;
+                    if ((part.argument_number as number) in argument_keyoff_accumulator)
+                        argument_keyoff_accumulator[part.argument_number as number]++;
+                    else argument_keyoff_accumulator[part.argument_number as number] = 1;
 
-                    const key_off_number =
-                        argument_keyoff_accumulator[
-                            part.argument_number as number
-                        ];
+                    const key_off_number = argument_keyoff_accumulator[part.argument_number as number];
                     let inside_braces = "";
                     for (const element of part.content as SyntaxStringSegmentContent[]) {
                         inside_braces += construct_regex_part(element);
                     }
-                    res += `(?<keyoff_${(
-                        part.argument_number as number
-                    ).toString()}_${key_off_number.toString()}>${inside_braces})?`;
+                    res += `(?<keyoff_${(part.argument_number as number).toString()}_${key_off_number.toString()}>${inside_braces})?`;
                     break;
                 }
                 case SyntaxStringSegmentType.ArgumentIdentifier: {
-                    res += `(?<arg_${(
-                        part.argument_number as number
-                    ).toString()}>.+?)`;
+                    res += `(?<arg_${(part.argument_number as number).toString()}>.+?)`;
                     break;
                 }
             }
@@ -405,13 +300,9 @@ export const syntax_string_to_argument_regex = function (
     }
     res += "$";
 
-    const return_value: [RegExp, { [key: number]: number }] = [
-        new RegExp(res, "mi"),
-        argument_keyoff_accumulator,
-    ];
+    const return_value: [RegExp, { [key: number]: number }] = [new RegExp(res, "mi"), argument_keyoff_accumulator];
 
-    if (prefix in syntax_string_compile_cache)
-        syntax_string_compile_cache[prefix][syntax_string] = return_value;
+    if (prefix in syntax_string_compile_cache) syntax_string_compile_cache[prefix][syntax_string] = return_value;
     else syntax_string_compile_cache[prefix] = { syntax_string: return_value };
     return return_value;
 };
@@ -426,21 +317,10 @@ export const syntax_string_to_argument_regex = function (
  * Otherwise, `return["inconsistent_key_offs"]` contains a list of optional arguments which were partially provided, i.e. some of their
  * key-off groups were matched and others weren't.
  */
-export const get_args = function (
-    prefix: string,
-    command: SimpleCommandManual,
-    invocation: string,
-): GetArgsResult<typeof command.arguments> {
-    const result = syntax_string_to_argument_regex(
-        prefix,
-        command.arguments,
-        command.syntax,
-    );
+export const get_args = function (prefix: string, command: SimpleCommandManual, invocation: string): ArgumentValues<typeof command.arguments> {
+    const result = syntax_string_to_argument_regex(prefix, command.arguments, command.syntax);
 
-    const failed = (
-        compiled: boolean,
-        syntax_string_error: [InvalidSyntaxStringReason, number] | null,
-    ): GetArgsResult<typeof command.arguments> => {
+    const failed = (compiled: boolean, syntax_string_error: [InvalidSyntaxStringReason, number] | null): ArgumentValues<typeof command.arguments> => {
         return {
             succeeded: false,
             compiled: compiled,
@@ -503,18 +383,8 @@ export const get_args = function (
             const group_name = `keyoff_${argument_number}_${i.toString()}`;
             if (is_string(groups[group_name])) {
                 if (i === 1) all_present = true;
-                else if (all_present === false)
-                    inconsistent_key_offs.push([
-                        command.arguments[Number(argument_number) - 1].name,
-                        i,
-                        false,
-                    ]);
-            } else if (all_present === true)
-                inconsistent_key_offs.push([
-                    command.arguments[Number(argument_number) - 1].name,
-                    i,
-                    true,
-                ]);
+                else if (all_present === false) inconsistent_key_offs.push([command.arguments[Number(argument_number) - 1].name, i, false]);
+            } else if (all_present === true) inconsistent_key_offs.push([command.arguments[Number(argument_number) - 1].name, i, true]);
         }
     }
 
@@ -529,10 +399,7 @@ export const get_args = function (
     }
 
     for (let i = 0; i < required_arguments.length; i++) {
-        if (
-            is_string(groups[`arg_${required_arg_numbers[i].toString()}`]) ===
-            false
-        ) {
+        if (is_string(groups[`arg_${required_arg_numbers[i].toString()}`]) === false) {
             log(
                 `get_args: command ${
                     command.name
@@ -557,9 +424,7 @@ export const get_args = function (
     return {
         succeeded: true,
         compiled: true,
-        values: renamed_params as GetArgsResult<
-            typeof command.arguments
-        >["values"],
+        values: renamed_params as ArgumentValues<typeof command.arguments>["values"],
         inconsistent_key_offs: [],
         syntax_string_compilation_error: null,
     };
@@ -572,22 +437,13 @@ export const get_args = function (
  * @param args A list of tuples where `tuple[0]` is the subcommand's name and `tuple[1]` is the subcommand's manual.
  * @returns A tuple where `return[0]` is the name of the subcommand that matched and `return[1]` is the `GetArgsResult`, or `false` if there were no valid invocations.
  */
-export const get_first_matching_subcommand = function <
-    List extends readonly (readonly [string, SubcommandManual])[],
->(
+export const get_first_matching_subcommand = function <List extends readonly (readonly [string, SubcommandManual])[]>(
     prefix: string,
     invocation: string,
     args: List,
-):
-    | [
-          ContainedSubcommandNames<typeof args>,
-          GetArgsResult<ContainedArgumentsList<typeof args>>,
-      ]
-    | false {
+): [ContainedSubcommandNames<typeof args>, ArgumentValues<ContainedArgumentsList<typeof args>>] | false {
     for (let i = 0; i < args.length; i++) {
-        const subcommand_name = args[i][0] as ContainedSubcommandNames<
-            typeof args
-        >;
+        const subcommand_name = args[i][0] as ContainedSubcommandNames<typeof args>;
         const manual = args[i][1];
         const result = get_args(prefix, manual, invocation);
         if (result.succeeded) return [subcommand_name, result as any];
@@ -596,11 +452,9 @@ export const get_first_matching_subcommand = function <
     return false;
 };
 
-export const handle_GetArgsResult = async function <
-    ArgumentList extends readonly CommandArgument[],
->(
+export const handle_GetArgsResult = async function <ArgumentList extends readonly CommandArgument[]>(
     message: Message,
-    result: GetArgsResult<ArgumentList>,
+    result: ArgumentValues<ArgumentList>,
     prefix: string | undefined,
 ): Promise<boolean> {
     if (result.succeeded) return true;
@@ -613,13 +467,9 @@ export const handle_GetArgsResult = async function <
             message.channel.send(
                 `Detail: ${result.inconsistent_key_offs
                     .map(tuple => {
-                        return `in the case of ${
-                            tuple[0]
-                        }, the first group that determined whether it was provided ${
+                        return `in the case of ${tuple[0]}, the first group that determined whether it was provided ${
                             tuple[2] ? "was" : "was not"
-                        } present, while at least one of the others ${
-                            tuple[2] === false ? "was" : "was not"
-                        }.`;
+                        } present, while at least one of the others ${tuple[2] === false ? "was" : "was not"}.`;
                     })
                     .join("\n")}`,
             );
@@ -633,10 +483,7 @@ export const handle_GetArgsResult = async function <
     } else {
         message.channel.send(
             `Developer-level error: the provided syntax string for the command failed to compile (error: ${(
-                result.syntax_string_compilation_error as [
-                    InvalidSyntaxStringReason,
-                    number,
-                ]
+                result.syntax_string_compilation_error as [InvalidSyntaxStringReason, number]
             ).join()}). Contact @${MAINTAINER_TAG} for help.`,
         );
 
