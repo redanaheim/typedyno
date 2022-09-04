@@ -15,11 +15,11 @@ export const url = function (paste: Paste): string {
     return "https://paste.ee/r/" + paste.id;
 };
 
-import Paste from "paste.ee";
+import { create } from "../paste_ee.js";
 
 export const create_paste = async function (text: string): Promise<CreatePasteResult> {
     try {
-        const posted = await Paste(text, PASTE_API_TOKEN);
+        const posted = await create(text, PASTE_API_TOKEN);
         return {
             paste: posted,
         };
