@@ -28,7 +28,6 @@ export const create = async function (text: string, auth_key: string, title?: st
                 } else if ((d as object) instanceof Buffer) {
                     data += (d as Buffer).toString("utf-8");
                 }
-                data += d.toString();
             });
 
             res.on("close", () => {
