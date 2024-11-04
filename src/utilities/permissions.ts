@@ -125,6 +125,10 @@ export const allowed_under = function(snowflake?: Snowflake, specifier?: Inclusi
 
 export const allowed = function(message: Message, permissions: Permissions): boolean {
 
+    if (!permissions) {
+        return true;
+    }
+
     switch (allowed_under(message.guild.id, permissions.servers)) { // Server level
         case TentativePermissionType.NotAllowed: // Never allowed
             return false;
