@@ -1,6 +1,6 @@
 import * as Chalk from "chalk";
 
-enum LogType {
+export enum LogType {
     None,
     Status,
     Error,

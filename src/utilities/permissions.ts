@@ -3,6 +3,9 @@ import { is_server, to_string } from "./typeutils";
 
 export type Snowflake = string | number
 
+// TODO: add whitelists and blacklists that defer to lower levels, i.e. so that whitelisted users can
+// still use the commands on blacklisted servers (DeferringWhitelist, DeferringBlacklist)
+
 export enum InclusionSpecifierType {
     Whitelist,
     Blacklist
