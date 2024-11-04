@@ -90,11 +90,11 @@ export async function  get_prefix(server: Guild, query_device: Pool | PoolClient
 
 export enum SetPrefixNonStringResult
  {
-    InvalidGuildArgument = 0,
-    InvalidPrefixArgument = 1,
-    LocalPrefixArgumentSameAsGlobalPrefix = 2,
-    CreatedNewRow = 3,
-    DatabaseOperationFailed = 4
+    InvalidGuildArgument = "InvalidGuildArgument",
+    InvalidPrefixArgument = "InvalidPrefixArgument",
+    LocalPrefixArgumentSameAsGlobalPrefix = "LocalPrefixArgumentSameAsGlobalPrefix",
+    CreatedNewRow = "CreatedNewRow",
+    DatabaseOperationFailed = "DatabaseOperationFailed"
 }
 
 export interface SetPrefixResults {

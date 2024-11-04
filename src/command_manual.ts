@@ -1,5 +1,11 @@
-import { GLOBAL_PREFIX } from "./main"
+import { Message } from "discord.js"
+import { STOCK_BOT_COMMANDS } from "./functions"
+import { CreatePasteResult, create_paste, Paste } from "./integrations/paste_ee"
+import { GLOBAL_PREFIX, MODULES } from "./main"
+import { log, LogType } from "./utilities/log"
+import { allowed } from "./utilities/permissions"
 import { escape_reg_exp, is_string } from "./utilities/typeutils"
+
 
 /**
  * An interface which describes an argument a command or subcommand takes.
@@ -11,11 +17,11 @@ export interface CommandArgument {
     optional: boolean;
 }
 
-const is_valid_CommandArgument = function(thing?: any): boolean {
+const is_valid_CommandArgument = function(thing?: Partial<CommandArgument>): thing is CommandArgument {
     if (!thing) {
         return false
     }
-    else if (is_string(thing.name) === false) {
+    else if (is_string(thing) === false) {
         return false
     }
     else if (thing.optional !== true && thing.optional !== false) {
@@ -37,7 +43,7 @@ export interface SubcommandManual {
     // Example with optional: <prefix>proof get{opt $2}[ |] $1{opt $2}[ | $2]
     // In the example with the optional, the pipelines are only required if argument $2 is present.
     syntax: string;
-    arguments: [CommandArgument]
+    arguments: CommandArgument[]
     // A description of the subcommand to be added on in the manual.
     description: string;
 }
@@ -48,7 +54,7 @@ export interface SubcommandManual {
  */
 export type SimpleCommandManual = SubcommandManual
 
-const is_valid_SimpleCommandManual = function(thing?: any): boolean {
+const is_valid_SimpleCommandManual = function(thing?: Partial<SimpleCommandManual>): thing is SimpleCommandManual {
     if (!thing) {
         return false
     }
@@ -79,12 +85,12 @@ const is_valid_SubcommandManual = is_valid_SimpleCommandManual
 export interface MultifacetedCommandManual {
     // Name of command, i.e. tj in %tj list
     name: string;
-    subcommands: [SubcommandManual],
+    subcommands: SubcommandManual[],
     // A description of the command to be added on in the manual.
     description: string;
 }
 
-const is_valid_MultifacetedCommandManual = function(thing?: any): boolean {
+const is_valid_MultifacetedCommandManual = function(thing?: Partial<MultifacetedCommandManual>): thing is MultifacetedCommandManual {
 
     if (!thing) {
         return false
@@ -279,5 +285,74 @@ export const create_manual_entry = function(command_manual: CommandManual, prefi
     else {
         return false
     }
+
+}
+
+export const make_manual = async function(message: Message, prefix_substitution: string): Promise<CreatePasteResult> {
+
+    log(`make_manual function called. Process starting...`, LogType.Status)
+
+    let manual_section_accumulator: string[] = []
+
+    let stock_manual_accumulator: string[] = []
+
+    for (const bot_command of STOCK_BOT_COMMANDS) {
+        const manual_entry = create_manual_entry(bot_command.command_manual, prefix_substitution)
+
+        if (is_string(manual_entry)) {
+            stock_manual_accumulator.push(manual_entry);
+        }
+        else {
+            log(`make_manual skipped stock bot function "${bot_command.command_manual.name}": create_manual_entry returned false (unknown error).`, LogType.Error)
+        }
+    }
+
+    if (stock_manual_accumulator.length > 0) {
+        manual_section_accumulator.push(stock_manual_accumulator.join("\n\n"))
+    }
+    else {
+        log(`make_manual skipped listing stock commands: An empty section would have been the only thing present.`)
+    }
+
+    for (const module of MODULES) {
+
+        if (allowed(message, module.permissions) === false && module.hide_when_contradicts_permissions) {
+            log(`make_manual hid module ${module.name}: flag module.hide_when_contradicts_permissions set.`)
+            continue;
+        }
+        else {
+            let module_manual_accumulator: string[] = [`Module ${module.name}`]
+            if (module.servers_are_universes) {
+                module_manual_accumulator[0] += "\n(Module commands don't carry data between servers)"
+            }
+            for (const bot_command of module.functions) {
+                if (allowed(message, bot_command.permissions) === false && bot_command.hide_when_contradicts_permissions) {
+                    log(`make_manual hid function ${bot_command.command_manual.name}: flag bot_command.hide_when_contradicts_permissions set.`)
+                    continue;
+                }
+                else {
+                    const manual_entry = create_manual_entry(bot_command.command_manual, prefix_substitution)
+
+                    if (is_string(manual_entry)) {
+                        module_manual_accumulator.push(manual_entry);
+                    }
+                    else {
+                        log(`make_manual skipped bot function "${bot_command.command_manual.name}" from module "${module.name}": create_manual_entry returned false (unknown error).`, LogType.Error)
+                    }
+                }
+            }
+
+            if (module_manual_accumulator.length > 0) {
+                manual_section_accumulator.push(module_manual_accumulator.join("\n\n"))
+            }
+            else {
+                log(`make_manual skipped listing commands for module "${module.name}": An empty section would have been the only thing present.`)
+            }
+        }
+    }
+
+    const full_manual = manual_section_accumulator.join("\n\n\n");
+
+    return await create_paste(`TypeDyno Command Manual\n==========================Local Prefix - ${prefix_substitution}\nNote: The prefix shown in this manual is only for this server.\nThe global prefix is ${GLOBAL_PREFIX}, but this may be overridden by individual servers.\n\n\n` + full_manual);
 
 }
