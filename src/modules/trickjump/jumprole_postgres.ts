@@ -9,12 +9,16 @@ import {
     Jumprole,
     JumproleHandle,
     JumproleHandleType,
+    JumproleSPECIFICATION,
     PartialJumproleSPECIFICATION,
     PGJumprole_to_Jumprole,
 } from "./jumprole_type";
 
 export const GET_JUMPROLE_BY_ID = `SELECT * FROM trickjump_jumps WHERE id=$1`;
 export const GET_JUMPROLE_BY_NAME_AND_SERVER = `SELECT * FROM trickjump_jumps WHERE name=$1 AND server=$2`;
+export const DELETE_JUMPROLE_BY_ID = `DELETE FROM trickjump_jumps WHERE id=$1`;
+export const DELETE_JUMPROLE_BY_NAME_AND_SERVER = `DELETE FROM trickjump_jumps WHERE name=$1 AND server=$2`;
+export const INSERT_JUMPROLE = `INSERT INTO trickjump_jumps (name, description, kingdom, location, jump_type, link, added_by, updated_at, server, hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`;
 
 type Queryable = Pool | PoolClient;
 
@@ -35,6 +39,23 @@ export interface ModifyJumproleResult {
     result_type: ModifyJumproleResultType;
     new: Jumprole | undefined;
 }
+
+export const query_failure = function (
+    function_name: string,
+    query_string: string,
+    query_parameters: any[],
+    err: any,
+): void {
+    log(
+        `${function_name}: unexpectedly failed when attempting query.`,
+        LogType.Error,
+    );
+    log(`Query string:`, LogType.Error);
+    log(query_string, LogType.Error);
+    log(`Query parameters: `, LogType.Error);
+    log(safe_serialize(query_parameters), LogType.Error);
+    log(safe_serialize(err), LogType.Error);
+};
 
 export const get_jumprole = async (
     handle: JumproleHandle,
@@ -221,7 +242,7 @@ export const modify_jumprole = async function (
                         LogType.Error,
                     );
                     return {
-                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        result_type: ModifyJumproleResultType.NameTooLong,
                         new: undefined,
                     };
                 }
@@ -237,7 +258,8 @@ export const modify_jumprole = async function (
                         LogType.Error,
                     );
                     return {
-                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        result_type:
+                            ModifyJumproleResultType.DescriptionTooLong,
                         new: undefined,
                     };
                 }
@@ -269,7 +291,7 @@ export const modify_jumprole = async function (
                         LogType.Error,
                     );
                     return {
-                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        result_type: ModifyJumproleResultType.LocationTooLong,
                         new: undefined,
                     };
                 }
@@ -285,7 +307,7 @@ export const modify_jumprole = async function (
                         LogType.Error,
                     );
                     return {
-                        result_type: ModifyJumproleResultType.InvalidQuery,
+                        result_type: ModifyJumproleResultType.LinkTooLong,
                         new: undefined,
                     };
                 }
@@ -352,18 +374,202 @@ export const modify_jumprole = async function (
             new: target_obj,
         };
     } catch (err) {
-        log(
-            `modify_jumprole: unexpectedly failed when attempting query.`,
-            LogType.Error,
-        );
-        log(`Query string:`, LogType.Error);
-        log(full_request, LogType.Error);
-        log(`Query parameters: `, LogType.Error);
-        log(safe_serialize(full_query_params), LogType.Error);
-        log(safe_serialize(err), LogType.Error);
+        query_failure("modify_jumprole", full_request, full_query_params, err);
         return {
             result_type: ModifyJumproleResultType.InvalidQuery,
             new: undefined,
         };
+    }
+};
+
+export enum DeleteJumproleResult {
+    NoneMatchJumproleHandle,
+    InvalidJumproleHandle,
+    Success,
+    QueryFailed,
+}
+
+/**
+ *
+ * @param handle The handle that refers to the `Jumprole` to delete
+ * @param queryable The `Pool` or `PoolClient` used to make the PostgreSQL database query
+ * @returns `DeleteJumproleResult` indicating whether the function succeeded and if not, what the problem was
+ */
+export const delete_jumprole = async function (
+    handle: JumproleHandle,
+    queryable: Queryable,
+): Promise<DeleteJumproleResult> {
+    const type = check_jumprole_handle(handle);
+
+    switch (type) {
+        case JumproleHandleType.Invalid: {
+            log(
+                `delete_jumprole: invalid Jumprole handle received. Handle argument:`,
+                LogType.Error,
+            );
+            log(safe_serialize(handle), LogType.Error);
+            return DeleteJumproleResult.InvalidJumproleHandle;
+        }
+        case JumproleHandleType.ID: {
+            const previous = await get_jumprole(handle, queryable);
+
+            if (previous === null) {
+                return DeleteJumproleResult.NoneMatchJumproleHandle;
+            } else {
+                const query_string = DELETE_JUMPROLE_BY_ID;
+                const query_params = [handle as number];
+                try {
+                    await queryable.query(query_string, query_params);
+                    return DeleteJumproleResult.Success;
+                } catch (err) {
+                    query_failure(
+                        "delete_jumprole",
+                        query_string,
+                        query_params,
+                        err,
+                    );
+                    return DeleteJumproleResult.QueryFailed;
+                }
+            }
+        }
+        case JumproleHandleType.NameAndServer: {
+            const previous = await get_jumprole(handle, queryable);
+
+            if (previous === null) {
+                return DeleteJumproleResult.NoneMatchJumproleHandle;
+            } else {
+                const query_string = DELETE_JUMPROLE_BY_NAME_AND_SERVER;
+                const query_params = handle as [string, Snowflake];
+
+                try {
+                    await queryable.query(query_string, query_params);
+                    return DeleteJumproleResult.Success;
+                } catch (err) {
+                    query_failure(
+                        "delete_jumprole",
+                        query_string,
+                        query_params,
+                        err,
+                    );
+                    return DeleteJumproleResult.QueryFailed;
+                }
+            }
+        }
+    }
+};
+
+export enum CreateJumproleResult {
+    InvalidJumproleObject,
+    QueryFailed,
+    Success,
+    NameTooLong,
+    DescriptionTooLong,
+    LocationTooLong,
+    JumpTypeTooLong,
+    LinkTooLong,
+    JumproleAlreadyExists,
+}
+
+/**
+ * Adds a `Jumprole` object to the database, recomputing its hash and updating its `updated_at` value to the current date.
+ * This means the `hash` and `updated_at` properties must still be provided, but they are not used.
+ * @param jumprole The `Jumprole` object to add to the database.
+ * @param queryable The `Pool` or `PoolClient` used to execute the PostgreSQL database query.
+ * @returns `CreateJumproleResult` indicating either success or failure, and what the problem was if there was one.
+ */
+export const create_jumprole = async function (
+    jumprole: Jumprole,
+    queryable: Queryable,
+): Promise<CreateJumproleResult> {
+    let jumprole_result = check_specification(
+        jumprole,
+        "create_jumprole",
+        JumproleSPECIFICATION,
+    );
+
+    if (jumprole_result === false) {
+        log(
+            `create_jumprole: unexpectedly received non-Jumprole object. Returning appropriate error code.`,
+            LogType.Error,
+        );
+        log(`jumprole:`, LogType.Error);
+        log(safe_serialize(jumprole), LogType.Error);
+        return CreateJumproleResult.InvalidJumproleObject;
+    }
+
+    const existing = await get_jumprole(
+        [jumprole_result.name, jumprole_result.server],
+        queryable,
+    );
+
+    if (existing !== null) {
+        return CreateJumproleResult.JumproleAlreadyExists;
+    }
+
+    if (jumprole_result.name.length > 100) {
+        log(
+            `create_jumprole: object had property "name" with length longer than 100. Returning.`,
+            LogType.Error,
+        );
+        return CreateJumproleResult.NameTooLong;
+    }
+    if (jumprole_result.description.length > 1500) {
+        log(
+            `create_jumprole: object had property "description" with length longer than 1500. Returning.`,
+            LogType.Error,
+        );
+        return CreateJumproleResult.DescriptionTooLong;
+    }
+    if (
+        jumprole_result.location !== null &&
+        jumprole_result.location.length > 200
+    ) {
+        log(
+            `create_jumprole: object had property "location" with length longer than 200. Returning.`,
+            LogType.Error,
+        );
+        return CreateJumproleResult.LocationTooLong;
+    }
+    if (
+        jumprole_result.jump_type !== null &&
+        jumprole_result.jump_type.length > 200
+    ) {
+        log(
+            `create_jumprole: object had property "jump_type" with length longer than 200. Returning.`,
+            LogType.Error,
+        );
+        return CreateJumproleResult.JumpTypeTooLong;
+    }
+    if (jumprole_result.link !== null && jumprole_result.link.length > 150) {
+        log(
+            `create_jumprole: object had property "link" with length longer than 150. Returning.`,
+            LogType.Error,
+        );
+        return CreateJumproleResult.LinkTooLong;
+    }
+
+    jumprole_result.updated_at = new Date();
+    jumprole_result.hash = compute_jumprole_hash(jumprole);
+
+    const query_string = INSERT_JUMPROLE;
+    const query_params = [
+        jumprole_result.name,
+        jumprole_result.description,
+        jumprole_result.kingdom,
+        jumprole_result.location,
+        jumprole_result.jump_type,
+        jumprole_result.link,
+        jumprole_result.added_by,
+        Math.floor(jumprole_result.updated_at.getTime() / 1000),
+        jumprole_result.server,
+        jumprole_result.hash,
+    ];
+
+    try {
+        await queryable.query(INSERT_JUMPROLE, query_params);
+        return CreateJumproleResult.Success;
+    } catch (err) {
+        query_failure("create_jumprole", query_string, query_params, err);
+        return CreateJumproleResult.QueryFailed;
     }
 };
