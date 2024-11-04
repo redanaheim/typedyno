@@ -52,7 +52,7 @@ export interface SubcommandManual {
 export type SimpleCommandManual = SubcommandManual;
 
 const is_valid_SimpleCommandManual = function (
-    thing?: Partial<SimpleCommandManual>,
+    thing: any,
 ): thing is SimpleCommandManual {
     if (!thing) {
         // log(`is_valid_SimpleCommandManual returned false - thing was null, undefined, and empty string, or another falsy object`, LogType.Mismatch)
@@ -92,7 +92,7 @@ export interface MultifacetedCommandManual {
 }
 
 const is_valid_MultifacetedCommandManual = function (
-    thing?: Partial<MultifacetedCommandManual>,
+    thing?: any,
 ): thing is MultifacetedCommandManual {
     if (!thing) {
         return false;
@@ -124,9 +124,7 @@ export enum CommandManualType {
     Invalid,
 }
 
-export const get_type = function (
-    command_manual: CommandManual,
-): CommandManualType {
+export const get_type = function (command_manual?: unknown): CommandManualType {
     if (is_valid_SimpleCommandManual(command_manual)) {
         return CommandManualType.SimpleCommandManual;
     } else if (is_valid_MultifacetedCommandManual(command_manual)) {

@@ -27,7 +27,7 @@ export enum NoLocalPrefixEntryReason {
  * @param pool The Heroku postgres server database connection pool to use when making database queries. Use this when not making a lot of requests in succession.
  */
 export async function get_prefix_entry(
-    server: Guild,
+    server: Guild | undefined | null,
     pool: Pool,
 ): Promise<string | NoLocalPrefixEntryReason>;
 /**
@@ -36,19 +36,26 @@ export async function get_prefix_entry(
  * @param pool_client The Heroku postgres server database pool client to use when making database queries. The caller is responsible for its release.
  */
 export async function get_prefix_entry(
-    server: Guild,
+    server: Guild | undefined | null,
     pool_client: PoolClient,
 ): Promise<string | NoLocalPrefixEntryReason>;
 
 export async function get_prefix_entry(
-    server: Guild,
+    server: Guild | undefined | null,
     query_device: Pool | PoolClient,
 ): Promise<string | NoLocalPrefixEntryReason> {
-    if (is_string(server.id) === false) {
+    if (
+        server === undefined ||
+        server === null ||
+        "id" in server === false ||
+        is_string(server.id) === false
+    ) {
         return NoLocalPrefixEntryReason.InvalidGuildArgument;
     }
     // If we have a cached prefix for it, use that
     if (is_string(prefix_cache[server.id])) {
+        // { ts-malfunction }
+        // @ts-expect-error
         return prefix_cache[server.id];
     } else if (prefix_cache[server.id] === null) {
         return NoLocalPrefixEntryReason.NoDatabaseEntry;
@@ -69,6 +76,8 @@ export async function get_prefix_entry(
         else {
             // Update the cache
             prefix_cache[server.id] = prefixes.rows[0].prefix;
+            // { ts-malfunction }
+            // @ts-expect-error
             return prefix_cache[server.id];
         }
     }
@@ -92,12 +101,12 @@ export async function get_prefix(server: Guild, pool: Pool): Promise<string>;
  * @returns Prefix for the start of commands. Example: '%' in "%info" or "t1" in "t1info"
  */
 export async function get_prefix(
-    server: Guild,
+    server: Guild | undefined | null,
     pool_client: Pool,
 ): Promise<string>;
 
 export async function get_prefix(
-    server: Guild,
+    server: Guild | undefined | null,
     query_device: Pool | PoolClient,
 ): Promise<string> {
     var local_prefix;
@@ -187,7 +196,7 @@ export const set_prefix = async function (
     };
 
     // If they didn't pass a PoolClient, connect one.
-    if (!pool_client) {
+    if (!pool_client || pool_client === undefined) {
         client = await pool.connect();
         did_use_passed_pool_client = false;
     } else {
@@ -195,6 +204,9 @@ export const set_prefix = async function (
         client = pool_client;
     }
 
+    // pool_client was just un-nulled up there! what are you talking about...
+    // { ts-malfunction }
+    // @ts-expect-error
     const local_prefix_entry = await get_prefix_entry(server, pool_client);
 
     // If this server has no special prefix entry and the user wants to set prefix the same as GLOBAL_PREFIX, there's no reason to.
@@ -307,6 +319,16 @@ export const set_prefix = async function (
         return {
             result: local_prefix_entry,
             did_succeed: true,
+        };
+    } else {
+        // something is seriously wrong... lol
+        log(
+            `set_prefix: reached never-point else in chain of if-elses that should cover the possible set of circumstances. Returning object that indicates we did not succeed...`,
+            LogType.Error,
+        );
+        return {
+            result: GLOBAL_PREFIX,
+            did_succeed: false,
         };
     }
 };

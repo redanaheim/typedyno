@@ -16,11 +16,14 @@ import { performance } from "perf_hooks";
 import { log, LogType } from "./utilities/log";
 import {
     allowed,
-    InclusionSpecifierType,
     is_valid_Permissions,
     Permissions,
 } from "./utilities/permissions";
-import { escape_reg_exp, is_string } from "./utilities/typeutils";
+import {
+    escape_reg_exp,
+    is_string,
+    is_text_channel,
+} from "./utilities/typeutils";
 import { url } from "./integrations/paste_ee";
 
 export enum BotCommandProcessResultType {
@@ -43,6 +46,19 @@ export const confirm = async function (message: Message): Promise<boolean> {
         return false;
     }
 };
+
+export type BotCommandProcess =
+    | ((
+          message: Message,
+          client: Client,
+          pool: Pool,
+          prefix: string,
+      ) => Promise<BotCommandProcessResults> | BotCommandProcessResults)
+    | ((
+          message: Message,
+          client: Client,
+          pool: Pool,
+      ) => Promise<BotCommandProcessResults> | BotCommandProcessResults);
 export interface BotCommand {
     // Optional more specific permissions. If a module is unavailable, this command will be too,
     // however these permissions can further restrict certain commands.
@@ -51,17 +67,10 @@ export interface BotCommand {
     command_manual: CommandManual;
     hide_when_contradicts_permissions: boolean;
     // Command should return whether the command succeeded or not
-    process: (
-        message: Message,
-        client: Client,
-        pool: Pool,
-        prefix?: string,
-    ) => Promise<BotCommandProcessResults> | BotCommandProcessResults;
+    process: BotCommandProcess;
 }
 
-export const is_valid_BotCommand = function (
-    thing?: Partial<BotCommand>,
-): thing is BotCommand {
+export const is_valid_BotCommand = function (thing: any): thing is BotCommand {
     if (!thing) {
         return false;
     } else if (
@@ -273,6 +282,8 @@ export const process_message_for_commands = async function (
             call_to_return_span_ms: end_time - start_time,
             command_name: valid_command.command_manual.name,
             did_use_module: using_module !== null,
+            // { ts-malfunction }
+            // @ts-expect-error
             module_name: using_module,
             not_authorized_reason: result.not_authorized_message,
         };
@@ -297,8 +308,8 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
         hide_when_contradicts_permissions: false,
         process: async (
             message: Message,
-            client: Client,
-            pool: Pool,
+            _client: Client,
+            _pool: Pool,
             prefix: string,
         ): Promise<BotCommandProcessResults> => {
             const paste = await make_manual(message, prefix);
@@ -311,11 +322,22 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
             } else if (is_string(paste.paste?.id)) {
                 message.channel.send(
                     `You can find the command manual here: ${url(
+                        // how could paste be undefined?! paste.paste.id was a string...
+                        // { ts-malfunction }
+                        // @ts-expect-error
                         paste.paste,
                     )}. Note that certain commands may be hidden if you lack permission to use them.`,
                 );
                 return { type: BotCommandProcessResultType.Succeeded };
             }
+
+            const err = `'commands' process: internal error - make_manual neither returned an error nor a paste. Returning BotCommandProcessResultType.DidNotSucceed`;
+
+            message.channel.send(err);
+            log(err, LogType.Error);
+            return {
+                type: BotCommandProcessResultType.DidNotSucceed,
+            };
         },
     },
     {
@@ -351,7 +373,7 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
         hide_when_contradicts_permissions: false,
         process: async (
             message: Message,
-            client: Client,
+            _client: Client,
             pool: Pool,
             prefix: string,
         ): Promise<BotCommandProcessResults> => {
@@ -377,16 +399,36 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                             message.channel.send(
                                 `The global prefix is "${prefix_result}" and it hasn't been changed locally, but you already knew that.`,
                             );
+                            return {
+                                type: BotCommandProcessResultType.Succeeded,
+                            };
                         } else {
                             message.channel.send(
                                 `The local prefix is "${prefix_result}", but you already knew that.`,
                             );
+                            return {
+                                type: BotCommandProcessResultType.Succeeded,
+                            };
                         }
+                        break;
                     }
                     case "set": {
                         if (is_string(match.groups["post"])) {
-                            if (CONFIG.admins.includes(message.author.id)) {
+                            if (is_text_channel(message) === false) {
+                                message.channel.send(
+                                    "Setting a local prefix in a non-text or DM channel is not allowed.",
+                                );
+                                return {
+                                    type: BotCommandProcessResultType.DidNotSucceed,
+                                };
+                            } else if (
+                                CONFIG.admins.includes(message.author.id)
+                            ) {
                                 const result = await set_prefix(
+                                    // if message is not in a valid text channel, the if above this will trigger and this clause will not run
+                                    // is_text_channel explicitly checks whether message.guild instanceof Guild === true
+                                    // { ts-malfunction }
+                                    // @ts-expect-error
                                     message.guild,
                                     pool,
                                     match.groups["post"],
@@ -438,6 +480,10 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                                         "You must be a bot admin or otherwise authorized person to set a server prefix.",
                                 };
                             }
+                        } else {
+                            return {
+                                type: BotCommandProcessResultType.Invalid,
+                            };
                         }
                     }
                     default: {
@@ -458,8 +504,8 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
         hide_when_contradicts_permissions: false,
         process: async (
             message: Message,
-            client: Client,
-            pool: Pool,
+            _client: Client,
+            _pool: Pool,
             prefix: string,
         ): Promise<BotCommandProcessResults> => {
             let base_info = `**Useful commands**:\n${prefix}commands: Lists the commands this bot has.\n**GitHub**: https://github.com/TigerGold59/typedyno`;
