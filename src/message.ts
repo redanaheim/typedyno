@@ -20,7 +20,7 @@ export const process_message = async function (
   // Only use this area for non-command responses
   // such as replying to DMs.
 
-  const is_command = process_message_for_commands(message, client, pool);
+  const is_command = await process_message_for_commands(message, client, pool);
 
   // Process other information here like DMs, or mentions.
   // (Don't react to the mention if it's part of a command)

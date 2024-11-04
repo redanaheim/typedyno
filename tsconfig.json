@@ -6,7 +6,9 @@
         "sourceMap": true,
         "preserveConstEnums": true,
         "outDir": "out",
-        "alwaysStrict": true
+        "alwaysStrict": true,
+        "lib": ["ES2020"],
+        "downlevelIteration": true
     },
     "include": [
         "src/**/*"
