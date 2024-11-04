@@ -7,7 +7,8 @@
     "discord"
   ],
   "scripts": {
-    "start": "node out/main.js"
+    "start": "node out/main.js",
+    "heroku-postbuild": "tsc"
   },
   "author": "tigergold59",
   "license": "MIT",
