@@ -1,5 +1,6 @@
 import { Module } from "../../module_loader";
 import { InclusionSpecifierType } from "../../utilities/permissions";
+import { jumprole_cmd } from "./jumprole/jumprole_cmd";
 
 // Main module export object
 const trickjump_module: Module = {
@@ -10,10 +11,10 @@ const trickjump_module: Module = {
     permissions: {
         servers: {
             type: InclusionSpecifierType.Whitelist,
-            list: ["542766712785862666"]
-        }
+            list: ["542766712785862666"],
+        },
     },
-    functions: []
-}
+    functions: [jumprole_cmd],
+};
 
 module.exports = trickjump_module;

@@ -7,22 +7,22 @@ import { load_modules } from "./module_loader";
 
 export interface Config {
     admins: [Snowflake];
-    use: [string],
-    event_listeners: [string],
-    presence_data?: Discord.PresenceData,
-    [key: string]: unknown
+    use: [string];
+    event_listeners: [string];
+    presence_data?: Discord.PresenceData;
+    [key: string]: unknown;
 }
 
 export const CONFIG = require("../src/config.json") as Config;
-export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN;
-export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX;
+export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN as string;
+export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX as string;
 export const BOT_USER_ID = "864326626111913995";
-export const STOCK_TABLES = ["prefixes", "users"]
-export const MAINTAINER_TAG = "TigerGold59#8729"
+export const STOCK_TABLES = ["prefixes", "users"];
+export const MAINTAINER_TAG = "TigerGold59#8729";
 
-log("Loading modules...", LogType.Status)
-export const MODULES = load_modules()
-log("Module loading complete.", LogType.Success)
+log("Loading modules...", LogType.Status);
+export const MODULES = load_modules();
+log("Module loading complete.", LogType.Success);
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
@@ -30,26 +30,28 @@ log("Client created. Bot starting up...", LogType.Status);
 const connection_pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false
-    }
-})
+        rejectUnauthorized: false,
+    },
+});
 
 client.once("ready", () => {
+    if (client.user === null) {
+        return;
+    }
+
     log(`Bot ready; logged in as ${client.user.tag}.`, LogType.Success);
 
     // Set status
     if (!CONFIG.presence_data) {
         client.user.setPresence({
             activity: {
-                name: "@ for server prefix"
-            }
+                name: "@ for server prefix",
+            },
         });
-    }
-    else {
+    } else {
         client.user.setPresence(CONFIG.presence_data);
     }
-})
-
+});
 
 // Send messages through messages.ts
 client.on("message", message => {
@@ -57,10 +59,14 @@ client.on("message", message => {
 });
 
 // Use event listener files
-export type EventListenerModule = (client: Discord.Client, connection_pool: Pool) => (...args: any) => void 
+export type EventListenerModule = (
+    client: Discord.Client,
+    connection_pool: Pool,
+) => (...args: any) => void;
 for (const listener_name of CONFIG.event_listeners) {
     // Import each through a require (the reason it's not .ts is because the listeners will get compiled to .js)
-    let listener: EventListenerModule = require(`../events/${listener_name}.js`)(client, connection_pool);
+    let listener: EventListenerModule =
+        require(`../events/${listener_name}.js`)(client, connection_pool);
     // Apply the listener (listener name is actually the event name)
     client.on(listener_name, listener);
 }
@@ -70,15 +76,18 @@ client.login(DISCORD_API_TOKEN);
 
 // Listen for errors that require ending the process, instead of sitting idly
 const error_listener_function_connection = () => {
-    log("Process terminating due to a connection error.", LogType.Error)
+    log("Process terminating due to a connection error.", LogType.Error);
     process.exit(0);
-}
+};
 const error_listener_function_promise_rejection = (error: Error) => {
-    log("Process terminating due to an unhandled promise rejection.", LogType.PromiseRejection);
+    log(
+        "Process terminating due to an unhandled promise rejection.",
+        LogType.PromiseRejection,
+    );
     console.error(error);
     process.exit(0);
-}
+};
 
 client.on("disconnect", error_listener_function_connection);
 process.on("disconnect", error_listener_function_connection);
-process.on("unhandledRejection", error_listener_function_promise_rejection)
+process.on("unhandledRejection", error_listener_function_promise_rejection);
