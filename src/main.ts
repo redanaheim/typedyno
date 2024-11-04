@@ -1,33 +1,30 @@
-import { log, LogType } from "./utilities/log";
-import { Snowflake } from "./utilities/permissions";
+await new Promise((res, _rej) => {
+    setTimeout(res, 5000);
+});
 import * as Discord from "discord.js";
-import { process_message } from "./message";
-import { Pool } from "pg";
-import { load_modules } from "./module_loader";
+import { process_message } from "./message.js";
+import * as PG from "pg";
 
-export interface Config {
-    admins: [Snowflake];
-    use: [string];
-    event_listeners: [string];
-    presence_data?: Discord.PresenceData;
-    [key: string]: unknown;
-}
+import { load_modules } from "./module_loader.js";
 
-export const CONFIG = require("../src/config.json") as Config;
+import { CONFIG } from "./config.js";
+
 export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN as string;
 export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX as string;
 export const BOT_USER_ID = "864326626111913995";
 export const STOCK_TABLES = ["prefixes", "users"];
 export const MAINTAINER_TAG = "TigerGold59#8729";
 
+import { log, LogType } from "./utilities/log.js";
+
 log("Loading modules...", LogType.Status);
-export const MODULES = load_modules();
+export const MODULES = await load_modules();
 log("Module loading complete.", LogType.Success);
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
 
-const connection_pool = new Pool({
+const connection_pool = new PG.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
         rejectUnauthorized: false,
@@ -59,14 +56,10 @@ client.on("message", message => {
 });
 
 // Use event listener files
-export type EventListenerModule = (
-    client: Discord.Client,
-    connection_pool: Pool,
-) => (...args: any) => void;
+export type EventListenerModule = (client: Discord.Client, connection_pool: PG.Pool) => (...args: any) => void;
 for (const listener_name of CONFIG.event_listeners) {
     // Import each through a require (the reason it's not .ts is because the listeners will get compiled to .js)
-    let listener: EventListenerModule =
-        require(`../events/${listener_name}.js`)(client, connection_pool);
+    let listener: EventListenerModule = require(`../events/${listener_name}.js`)(client, connection_pool);
     // Apply the listener (listener name is actually the event name)
     client.on(listener_name, listener);
 }
@@ -80,10 +73,7 @@ const error_listener_function_connection = () => {
     process.exit(0);
 };
 const error_listener_function_promise_rejection = (error: Error) => {
-    log(
-        "Process terminating due to an unhandled promise rejection.",
-        LogType.PromiseRejection,
-    );
+    log("Process terminating due to an unhandled promise rejection.", LogType.PromiseRejection);
     console.error(error);
     process.exit(0);
 };

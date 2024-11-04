@@ -1,14 +1,23 @@
 import { Message } from "discord.js";
-import { STOCK_BOT_COMMANDS } from "./functions";
-import { CreatePasteResult, create_paste } from "./integrations/paste_ee";
-import { GLOBAL_PREFIX, MODULES } from "./main";
-import { log, LogType } from "./utilities/log";
-import { allowed } from "./utilities/permissions";
-import {
-    is_ParamValueType,
-    ParamValueType,
-} from "./utilities/runtime_typeguard";
-import { escape_reg_exp, is_string } from "./utilities/typeutils";
+import { BotCommand, BotCommandMetadataKey, STOCK_BOT_COMMANDS } from "./functions.js";
+import { CreatePasteResult, create_paste } from "./integrations/paste_ee.js";
+import { GLOBAL_PREFIX, MODULES } from "./main.js";
+import { DebugLogType, log, LogType } from "./utilities/log.js";
+import { allowed, Permissions } from "./utilities/permissions.js";
+import { is_ParamValueType, ParamValueType } from "./utilities/runtime_typeguard.js";
+import { escape_reg_exp, is_string, safe_serialize } from "./utilities/typeutils.js";
+
+export const manual_of = function (command: BotCommand): CommandManual | undefined {
+    return Reflect.getMetadata(BotCommandMetadataKey.Manual, command) as CommandManual | undefined;
+};
+
+export const permissions_of = function (command: BotCommand): Permissions | undefined {
+    return Reflect.getMetadata(BotCommandMetadataKey.Permissions, command) as Permissions | undefined;
+};
+
+export const is_no_use_no_see = function (command: BotCommand): boolean {
+    return Boolean(Reflect.getMetadata(BotCommandMetadataKey.Manual, command));
+};
 
 /**
  * An interface which describes an argument a command or subcommand takes.
@@ -24,19 +33,14 @@ export interface CommandArgument {
     readonly further_constraint?: ParamValueType;
 }
 
-const is_valid_CommandArgument = function (
-    thing?: Partial<CommandArgument>,
-): thing is CommandArgument {
+const is_valid_CommandArgument = function (thing?: Partial<CommandArgument>): thing is CommandArgument {
     if (!thing) {
         return false;
-    } else if (is_string(thing.name) === false || is_string(thing.id)) {
+    } else if (is_string(thing.name) === false || is_string(thing.id) === false) {
         return false;
     } else if (thing.optional !== true && thing.optional !== false) {
         return false;
-    } else if (
-        thing.further_constraint !== undefined &&
-        is_ParamValueType(thing.further_constraint) === false
-    ) {
+    } else if (thing.further_constraint !== undefined && is_ParamValueType(thing.further_constraint) === false) {
         return false;
     } else {
         return true;
@@ -64,29 +68,51 @@ export interface SubcommandManual {
  */
 export type SimpleCommandManual = SubcommandManual;
 
-const is_valid_SimpleCommandManual = function (
-    thing: any,
-): thing is SimpleCommandManual {
+const is_valid_SimpleCommandManual = function (thing: any): thing is SimpleCommandManual {
     if (!thing) {
-        // log(`is_valid_SimpleCommandManual returned false - thing was null, undefined, and empty string, or another falsy object`, LogType.Mismatch)
+        log(
+            `is_valid_SimpleCommandManual returned false - thing was null, undefined, an empty string, or another falsy object`,
+            LogType.Mismatch,
+            DebugLogType.ManualValidationFailedReason,
+        );
         return false;
     } else if (is_string(thing.name) === false) {
-        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "name"`, LogType.Mismatch)
+        log(
+            `is_valid_SimpleCommandManual returned false - thing had no string property "name"`,
+            LogType.Mismatch,
+            DebugLogType.ManualValidationFailedReason,
+        );
         return false;
     } else if (is_string(thing.syntax) === false) {
-        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "syntax"`, LogType.Mismatch)
+        log(
+            `is_valid_SimpleCommandManual returned false - thing had no string property "syntax"`,
+            LogType.Mismatch,
+            DebugLogType.ManualValidationFailedReason,
+        );
         return false;
     } else if (!thing.arguments || Array.isArray(thing.arguments) === false) {
-        // log(`is_valid_SimpleCommandManual returned false - thing had no array property "arguments"`, LogType.Mismatch)
+        log(
+            `is_valid_SimpleCommandManual returned false - thing had no array property "arguments"`,
+            LogType.Mismatch,
+            DebugLogType.ManualValidationFailedReason,
+        );
         return false;
     } else if (is_string(thing.description) === false) {
-        // log(`is_valid_SimpleCommandManual returned false - thing had no string property "description"`, LogType.Mismatch)
+        log(
+            `is_valid_SimpleCommandManual returned false - thing had no string property "description"`,
+            LogType.Mismatch,
+            DebugLogType.ManualValidationFailedReason,
+        );
         return false;
     }
 
     for (const element of thing.arguments) {
         if (is_valid_CommandArgument(element) === false) {
-            // log(`is_valid_SimpleCommandManual returned false - thing had non-command-argument item "${JSON.stringify(element)}" in thing.arguments`, LogType.Mismatch)
+            log(
+                `is_valid_SimpleCommandManual returned false - thing had non-command-argument item "${safe_serialize(element)}" in thing.arguments`,
+                LogType.Mismatch,
+                DebugLogType.ManualValidationFailedReason,
+            );
             return false;
         }
     }
@@ -104,17 +130,12 @@ export interface MultifacetedCommandManual {
     readonly description: string;
 }
 
-const is_valid_MultifacetedCommandManual = function (
-    thing?: any,
-): thing is MultifacetedCommandManual {
+const is_valid_MultifacetedCommandManual = function (thing?: any): thing is MultifacetedCommandManual {
     if (!thing) {
         return false;
     } else if (is_string(thing.name) === false) {
         return false;
-    } else if (
-        !thing.subcommands ||
-        Array.isArray(thing.subcommands) === false
-    ) {
+    } else if (!thing.subcommands || Array.isArray(thing.subcommands) === false) {
         return false;
     } else if (is_string(thing.description) === false) {
         return false;
@@ -131,7 +152,7 @@ const is_valid_MultifacetedCommandManual = function (
 
 export type CommandManual = SimpleCommandManual | MultifacetedCommandManual;
 
-export enum CommandManualType {
+export const enum CommandManualType {
     SimpleCommandManual,
     MultifacetedCommandManual,
     Invalid,
@@ -176,19 +197,10 @@ export const argument_identifier = function (argument_number: number): string {
 };
 
 export const keying_off_regex = function (argument_number: number): RegExp {
-    return new RegExp(
-        `\\{opt\\s*${escape_reg_exp(
-            argument_identifier(argument_number),
-        )}\\}\\s*\\[(.+?)\\]`,
-        "gi",
-    );
+    return new RegExp(`\\{opt\\s*${escape_reg_exp(argument_identifier(argument_number))}\\}\\s*\\[(.+?)\\]`, "gi");
 };
 
-export const key_off = function (
-    syntax_string: string,
-    argument_index: number,
-    provided: boolean,
-): string {
+export const key_off = function (syntax_string: string, argument_index: number, provided: boolean): string {
     const regex = keying_off_regex(argument_index);
     // log(`key_off created regex ${regex.source} for syntax string "${syntax_string}" and argument index ${argument_index.toString()} (provided: ${provided ? "true" : "false"}).`)
     if (provided === false) {
@@ -196,14 +208,14 @@ export const key_off = function (
     } else {
         const matches = syntax_string.matchAll(regex);
 
-        // log(`Found matches for keying_off_regex.`)
+        log(`Found matches for keying_off_regex.`, LogType.Status, DebugLogType.KeyOffFunctionDebug);
 
         const matches_arr = [...matches];
-        // log(`matches_arr: ${JSON.stringify(matches_arr)}`)
+        log(`matches_arr: ${JSON.stringify(matches_arr)}`, LogType.Status, DebugLogType.KeyOffFunctionDebug);
 
         // Replace each match with the content in the braces
         for (const match of matches_arr) {
-            // log(`Match: ${match[0]}, replacement: ${match[1]}`)
+            log(`Match: ${match[0]}, replacement: ${match[1]}`, LogType.Status, DebugLogType.KeyOffFunctionDebug);
             syntax_string = syntax_string.replace(match[0], match[1]);
         }
 
@@ -224,9 +236,7 @@ export const generate_syntaxes = function (
     prefix_substitution: string,
 ): string[] {
     // List of optional arguments
-    let optional_arguments = command_arguments.filter(
-        argument => argument.optional,
-    );
+    let optional_arguments = command_arguments.filter(argument => argument.optional);
 
     // Array showing which optional arguments we are considering not provided, for making the syntax list
     const state = optional_arguments.map(() => false);
@@ -262,29 +272,17 @@ export const generate_syntaxes = function (
 
         // Replace the parts that key off of whether the optional argument is provided, using the state
         for (let i = 0; i < optional_arguments.length; i++) {
-            let argument_index = command_arguments
-                .map(argument => argument.name)
-                .indexOf(optional_arguments[i].name);
-            state_dependent_syntax = key_off(
-                state_dependent_syntax,
-                argument_index,
-                state[i],
-            );
+            let argument_index = command_arguments.map(argument => argument.name).indexOf(optional_arguments[i].name);
+            state_dependent_syntax = key_off(state_dependent_syntax, argument_index, state[i]);
         }
 
         // Replace the argument numbers with their descriptions
         for (let i = 0; i < command_arguments.length; i++) {
-            state_dependent_syntax = state_dependent_syntax.replace(
-                argument_identifier(i),
-                `<${command_arguments[i].name}>`,
-            );
+            state_dependent_syntax = state_dependent_syntax.replace(argument_identifier(i), `<${command_arguments[i].name}>`);
         }
 
         // Replace the prefix preholder
-        state_dependent_syntax = state_dependent_syntax.replace(
-            "<prefix>",
-            prefix_substitution,
-        );
+        state_dependent_syntax = state_dependent_syntax.replace("<prefix>", prefix_substitution);
 
         syntaxes.push(state_dependent_syntax);
     }
@@ -292,25 +290,13 @@ export const generate_syntaxes = function (
     // Do one more iteration for when all are true or there are no optional arguments
     let state_dependent_syntax = syntax_string;
     for (let i = 0; i < optional_arguments.length; i++) {
-        let argument_index = command_arguments
-            .map(argument => argument.name)
-            .indexOf(optional_arguments[i].name);
-        state_dependent_syntax = key_off(
-            state_dependent_syntax,
-            argument_index,
-            state[i],
-        );
+        let argument_index = command_arguments.map(argument => argument.name).indexOf(optional_arguments[i].name);
+        state_dependent_syntax = key_off(state_dependent_syntax, argument_index, state[i]);
     }
     for (let i = 0; i < command_arguments.length; i++) {
-        state_dependent_syntax = state_dependent_syntax.replace(
-            argument_identifier(i),
-            `<${command_arguments[i].name}>`,
-        );
+        state_dependent_syntax = state_dependent_syntax.replace(argument_identifier(i), `<${command_arguments[i].name}>`);
     }
-    state_dependent_syntax = state_dependent_syntax.replace(
-        "<prefix>",
-        prefix_substitution,
-    );
+    state_dependent_syntax = state_dependent_syntax.replace("<prefix>", prefix_substitution);
     syntaxes.push(state_dependent_syntax);
 
     return syntaxes;
@@ -318,15 +304,8 @@ export const generate_syntaxes = function (
 
 export const INDENT = "    ";
 
-export const make_simple_command_manual = function (
-    manual: SimpleCommandManual,
-    prefix_substitution: string,
-): string {
-    let syntaxes = generate_syntaxes(
-        manual.arguments,
-        manual.syntax,
-        prefix_substitution,
-    );
+export const make_simple_command_manual = function (manual: SimpleCommandManual, prefix_substitution: string): string {
+    let syntaxes = generate_syntaxes(manual.arguments, manual.syntax, prefix_substitution);
 
     const syntax_accumulation = indent(
         syntaxes
@@ -336,13 +315,7 @@ export const make_simple_command_manual = function (
             .join("\n"),
     );
 
-    return (
-        manual.name +
-        ":\n" +
-        syntax_accumulation +
-        "\n" +
-        indent("Description: " + manual.description)
-    );
+    return manual.name + ":\n" + syntax_accumulation + "\n" + indent("Description: " + manual.description);
 };
 
 export const indent = function (str: string): string {
@@ -352,33 +325,19 @@ export const indent = function (str: string): string {
         .join("\n");
 };
 
-export const create_manual_entry = function (
-    command_manual: CommandManual,
-    prefix_substitution = GLOBAL_PREFIX,
-): string | false {
+export const create_manual_entry = function (command_manual: CommandManual, prefix_substitution = GLOBAL_PREFIX): string | false {
     const type = get_type(command_manual);
 
     if (type === CommandManualType.Invalid) {
         return false;
     } else if (type === CommandManualType.SimpleCommandManual) {
-        return make_simple_command_manual(
-            command_manual as SimpleCommandManual,
-            prefix_substitution,
-        );
+        return make_simple_command_manual(command_manual as SimpleCommandManual, prefix_substitution);
     } else if (type === CommandManualType.MultifacetedCommandManual) {
         let manual = command_manual as MultifacetedCommandManual;
-        const subcommand_list = `${manual.name} <${manual.subcommands
-            .map(subcommand => subcommand.name)
-            .join("/")}>\n`;
+        const subcommand_list = `${manual.name} <${manual.subcommands.map(subcommand => subcommand.name).join("/")}>\n`;
         let accumulator = subcommand_list;
         accumulator += indent(`Description: ${manual.description}`) + "\n\n";
-        accumulator += indent(
-            manual.subcommands
-                .map(subcommand =>
-                    make_simple_command_manual(subcommand, prefix_substitution),
-                )
-                .join("\n"),
-        );
+        accumulator += indent(manual.subcommands.map(subcommand => make_simple_command_manual(subcommand, prefix_substitution)).join("\n"));
 
         return accumulator;
     } else {
@@ -386,29 +345,25 @@ export const create_manual_entry = function (
     }
 };
 
-export const make_manual = async function (
-    message: Message,
-    prefix_substitution: string,
-): Promise<CreatePasteResult> {
-    log(`make_manual function called. Process starting...`, LogType.Status);
+export const make_manual = async function (message: Message, prefix_substitution: string): Promise<CreatePasteResult> {
+    log(`make_manual function called. Process starting...`, LogType.Status, DebugLogType.MakeManualFunctionDebug);
 
     let manual_section_accumulator: string[] = [];
 
     let stock_manual_accumulator: string[] = [];
 
     for (const bot_command of STOCK_BOT_COMMANDS) {
-        const manual_entry = create_manual_entry(
-            bot_command.command_manual,
-            prefix_substitution,
-        );
+        const manual = manual_of(bot_command);
+        if (manual === undefined) {
+            log(`make_manual skipped stock bot function: instance had no manual saved as metadata. Continuing...`, LogType.Error);
+            continue;
+        }
+        const manual_entry = create_manual_entry(manual, prefix_substitution);
 
         if (is_string(manual_entry)) {
             stock_manual_accumulator.push(manual_entry);
         } else {
-            log(
-                `make_manual skipped stock bot function "${bot_command.command_manual.name}": create_manual_entry returned false (unknown error).`,
-                LogType.Error,
-            );
+            log(`make_manual skipped stock bot function "${manual.name}": create_manual_entry returned false (unknown error).`, LogType.Error);
         }
     }
 
@@ -417,44 +372,40 @@ export const make_manual = async function (
     } else {
         log(
             `make_manual skipped listing stock commands: An empty section would have been the only thing present.`,
+            LogType.Status,
+            DebugLogType.MakeManualFunctionDebug,
         );
     }
 
     for (const module of MODULES) {
-        if (
-            allowed(message, module.permissions) === false &&
-            module.hide_when_contradicts_permissions
-        ) {
-            log(
-                `make_manual hid module ${module.name}: flag module.hide_when_contradicts_permissions set.`,
-            );
+        if (allowed(message, module.permissions) === false && module.hide_when_contradicts_permissions) {
+            log(`make_manual hid module ${module.name}: flag module.hide_when_contradicts_permissions set.`);
             continue;
         } else {
             let module_manual_accumulator: string[] = [`Module ${module.name}`];
             if (module.servers_are_universes) {
-                module_manual_accumulator[0] +=
-                    "\n(Module commands don't carry data between servers)";
+                module_manual_accumulator[0] += "\n(Module commands don't carry data between servers)";
             }
             for (const bot_command of module.functions) {
-                if (
-                    allowed(message, bot_command.permissions) === false &&
-                    bot_command.hide_when_contradicts_permissions
-                ) {
+                const manual = manual_of(bot_command);
+                if (manual === undefined) {
                     log(
-                        `make_manual hid function ${bot_command.command_manual.name}: flag bot_command.hide_when_contradicts_permissions set.`,
+                        `make_manual displaying BotCommand from module "${module.name}": instance had no manual saved as metadata. Continuing...`,
+                        LogType.Error,
                     );
                     continue;
+                }
+                if (allowed(message, permissions_of(bot_command)) === false && is_no_use_no_see(bot_command)) {
+                    log(`make_manual hid function ${manual.name}: flag bot_command.hide_when_contradicts_permissions set.`);
+                    continue;
                 } else {
-                    const manual_entry = create_manual_entry(
-                        bot_command.command_manual,
-                        prefix_substitution,
-                    );
+                    const manual_entry = create_manual_entry(manual, prefix_substitution);
 
                     if (is_string(manual_entry)) {
                         module_manual_accumulator.push(manual_entry);
                     } else {
                         log(
-                            `make_manual skipped bot function "${bot_command.command_manual.name}" from module "${module.name}": create_manual_entry returned false (unknown error).`,
+                            `make_manual skipped bot function "${manual.name}" from module "${module.name}": create_manual_entry returned false (unknown error).`,
                             LogType.Error,
                         );
                     }
@@ -462,13 +413,9 @@ export const make_manual = async function (
             }
 
             if (module_manual_accumulator.length > 0) {
-                manual_section_accumulator.push(
-                    module_manual_accumulator.join("\n\n"),
-                );
+                manual_section_accumulator.push(module_manual_accumulator.join("\n\n"));
             } else {
-                log(
-                    `make_manual skipped listing commands for module "${module.name}": An empty section would have been the only thing present.`,
-                );
+                log(`make_manual skipped listing commands for module "${module.name}": An empty section would have been the only thing present.`);
             }
         }
     }
