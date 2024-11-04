@@ -349,10 +349,12 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                     arguments: [
                         {
                             name: "string or symbol",
+                            id: "new_prefix",
                             optional: false,
                         },
                         {
                             name: "server ID",
+                            id: "guild_id",
                             optional: true,
                         },
                     ],

@@ -15,26 +15,32 @@ export const jumprole_cmd: BotCommand = {
                 arguments: [
                     {
                         name: "name",
+                        id: "name",
                         optional: false,
                     },
                     {
                         name: "kingdom",
+                        id: "kingdom",
                         optional: true,
                     },
                     {
                         name: "location",
+                        id: "location",
                         optional: true,
                     },
                     {
-                        name: "jump_type",
+                        name: "jump type",
+                        id: "jump_type",
                         optional: true,
                     },
                     {
                         name: "link",
+                        id: "link",
                         optional: true,
                     },
                     {
                         name: "description",
+                        id: "description",
                         optional: false,
                     },
                 ],
@@ -47,38 +53,45 @@ export const jumprole_cmd: BotCommand = {
                 arguments: [
                     {
                         name: "name",
+                        id: "name",
                         optional: false,
                     },
                     {
                         name: "kingdom",
+                        id: "kingdom",
                         optional: true,
                     },
                     {
                         name: "location",
+                        id: "location",
                         optional: true,
                     },
                     {
-                        name: "jump_type",
+                        name: "jump type",
+                        id: "jump_type",
                         optional: true,
                     },
                     {
                         name: "link",
+                        id: "link",
                         optional: true,
                     },
                     {
                         name: "description",
+                        id: "description",
                         optional: true,
                     },
                 ],
                 description:
                     "Updates the specified properties of the jumprole.",
-                syntax: "<prefix>jumprole update NAME $1{opt $2}[ KINGDOM $2]{opt $3}[ LOCATION $3]{opt $4}[ JUMP TYPE $4]{opt $5}[ LINK $5]${opt $6}[ INFO $6]",
+                syntax: "<prefix>jumprole update NAME $1{opt $2}[ KINGDOM $2]{opt $3}[ LOCATION $3]{opt $4}[ JUMP TYPE $4]{opt $5}[ LINK $5]{opt $6}[ INFO $6]",
             },
             {
                 name: "remove",
                 arguments: [
                     {
                         name: "name",
+                        id: "name",
                         optional: false,
                     },
                 ],
