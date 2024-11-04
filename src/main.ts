@@ -14,6 +14,8 @@ export interface Config {
 
 export const CONFIG = require("./config.json") as Config;
 export const DISCORD_API_TOKEN = process.env.DISCORD_API_TOKEN;
+export const GLOBAL_PREFIX = process.env.GLOBAL_PREFIX;
+export const BOT_USER_ID = "626223136047628308";
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
@@ -56,7 +58,7 @@ const error_listener_function_connection = () => {
     log("Process terminating due to a connection error.", LogType.Error)
     process.exit(0);
 }
-const error_listener_function_promise_rejection = (error) => {
+const error_listener_function_promise_rejection = (error: Error) => {
     log("Process terminating due to an unhandled promise rejection.", LogType.PromiseRejection);
     console.error(error);
     process.exit(0);
