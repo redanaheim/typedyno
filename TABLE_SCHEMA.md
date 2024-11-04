@@ -1,17 +1,17 @@
 # Heroku PostgreSQL Table Organization
 
-## Table: "prefixes"
+## Table: `prefixes`
 
-**Columns**: Snowflake, Prefix
+**Columns**: `snowflake`, `prefix`
 
-Snowflake - varchar
+`snowflake` - BigInt PRIMARY KEY
 
-Prefix - varchar
+`prefix` - varchar NOT NULL
 
-## Table: "users"
+## Table: `users`
 
-**Columns**: Snowflake, Permissions
+**Columns**: `snowflake`, `permissions`
 
-Snowflake: varchar
+`snowflake`: varchar PRIMARY KEY
 
-Permissions: varchar
+`permissions`: varchar

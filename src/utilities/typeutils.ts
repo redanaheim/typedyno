@@ -1,4 +1,3 @@
-import { Snowflake } from "./permissions";
 import { Guild } from "discord.js";
 
 export const is_string = function(thing?: unknown): thing is string {
@@ -36,13 +35,8 @@ export const is_number = function(thing?: unknown): thing is number {
     }
 }
 
-export const to_string = function(snowflake: Snowflake): string {
-    if (is_number(snowflake)) {
-        return (snowflake as number).toString();
-    }
-    else {
-        return snowflake as string;
-    }
+export const is_boolean = function(thing?: unknown): thing is boolean {
+    return thing === true || thing === false;
 }
 
 // TODO: Make utility function that checks what type of guild a Guild is (i.e. a server, group DM, etc.)
@@ -56,6 +50,21 @@ export const is_server = function(guild?: Guild): boolean {
 
 export const escape_reg_exp = function(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
+
+export const safe_serialize = function(value: any): string {
+    if (typeof value === "bigint") {
+        return `${value.toString(10)}n`;
+    }
+    else {
+        try {
+            const result = JSON.stringify(value);
+            return result;
+        }
+        catch (err) {
+            return "([circular object])"
+        }
+    }
 }
 
 export type Unknown<T> = Record<keyof T, unknown>

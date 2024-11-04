@@ -17,7 +17,7 @@ export interface Module {
     // Module name
     name: string,
     // Heroku PostgreSQL tables this module is allowed to create
-    tables: [string],
+    tables: string[],
     // Whether the module treats servers like universes, i.e. data
     // stored due to a command on one server will be inaccessible on another.
     // The other option is that data bridges servers.
@@ -62,12 +62,14 @@ export const load_module = function(name: string): Module | false {
         return false
     }
 
+    // @ts-expect-error
     for (const thing of module_export.tables) {
         if (is_string(thing) === false) {
             return false
         }
     }
 
+    // @ts-expect-error
     for (const thing of module_export.functions) {
         if (is_valid_BotCommand(thing) === false) {
             return false
