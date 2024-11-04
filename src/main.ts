@@ -1,8 +1,8 @@
-import * as FS from "fs";
 import { log, LogType } from "./utilities/log";
 import { Snowflake } from "./utilities/permissions";
 import * as Discord from "discord.js";
 import { process_message } from "./message";
+import { Pool } from "pg";
 
 export interface Config {
     admins: [Snowflake];
@@ -19,6 +19,13 @@ export const BOT_USER_ID = "626223136047628308";
 
 const client = new Discord.Client();
 log("Client created. Bot starting up...", LogType.Status);
+
+const connection_pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+})
 
 client.once("ready", () => {
     log(`Bot ready; logged in as ${client.user.tag}.`, LogType.Success);
@@ -39,13 +46,14 @@ client.once("ready", () => {
 
 // Send messages through messages.ts
 client.on("message", message => {
-    process_message(message, client);
+    process_message(message, client, connection_pool);
 });
 
 // Use event listener files
+export type EventListenerModule = (client: Discord.Client, connection_pool: Pool) => (...args: any) => void 
 for (const listener_name of CONFIG.event_listeners) {
     // Import each through a require (the reason it's not .ts is because the listeners will get compiled to .js)
-    let listener = require(`./events/${listener_name}.js`)(client);
+    let listener: EventListenerModule = require(`./events/${listener_name}.js`)(client, connection_pool);
     // Apply the listener (listener name is actually the event name)
     client.on(listener_name, listener);
 }
