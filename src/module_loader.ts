@@ -1,5 +1,4 @@
 import { randomBytes } from "crypto";
-import { CommandManual } from "./command_manual";
 import { BotCommand, is_valid_BotCommand, STOCK_BOT_COMMANDS } from "./functions";
 import { CONFIG, STOCK_TABLES } from "./main";
 import { log, LogType } from "./utilities/log";

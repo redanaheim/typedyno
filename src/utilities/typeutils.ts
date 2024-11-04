@@ -1,70 +1,63 @@
 import { Guild } from "discord.js";
 
-export const is_string = function(thing?: unknown): thing is string {
+export const is_string = function (thing?: unknown): thing is string {
     if (thing === "") {
         return true;
-    }
-    else if (!thing) {
+    } else if (!thing) {
         return false;
-    }
-    else if (typeof thing === "string") {
+    } else if (typeof thing === "string") {
         return true;
-    }
-    else {
+    } else {
         return false;
     }
-}
+};
 
-export const is_number = function(thing?: unknown): thing is number {
+export const is_number = function (thing?: unknown): thing is number {
     if (!thing) {
         return false;
-    }
-    else if (typeof thing === "number") {
+    } else if (typeof thing === "number") {
         if (isNaN(thing as number)) {
             return false;
-        }
-        else if (!isFinite(thing as number)) {
+        } else if (!isFinite(thing as number)) {
             return false;
-        }
-        else {
+        } else {
             return true;
         }
-    }
-    else {
+    } else {
         return false;
     }
-}
+};
 
-export const is_boolean = function(thing?: unknown): thing is boolean {
+export const is_boolean = function (thing?: unknown): thing is boolean {
     return thing === true || thing === false;
-}
+};
 
 // TODO: Make utility function that checks what type of guild a Guild is (i.e. a server, group DM, etc.)
 
-export const is_server = function(guild?: Guild): boolean {
+export const is_server = function (guild?: Guild): boolean {
     if (!guild) {
         return false;
     }
     return true;
-}
+};
 
-export const escape_reg_exp = function(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
-}
+export const escape_reg_exp = function (str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+};
 
-export const safe_serialize = function(value: any): string {
+export const safe_serialize = function (value: any): string {
     if (typeof value === "bigint") {
         return `${value.toString(10)}n`;
-    }
-    else {
+    } else {
         try {
             const result = JSON.stringify(value);
             return result;
-        }
-        catch (err) {
-            return "([circular object])"
+        } catch (err) {
+            return "([circular object])";
         }
     }
-}
+};
 
-export type Unknown<T> = Record<keyof T, unknown>
+export type Unknown<T> = { [P in keyof T]: unknown };
+
+export type OptionalNull<T> = { [P in keyof T]: T[P] | null };
