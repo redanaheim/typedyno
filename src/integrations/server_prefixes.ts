@@ -4,8 +4,11 @@ import { Pool, PoolClient } from "pg";
 import { is_string } from "../utilities/typeutils";
 import { log, LogType } from "../utilities/log";
 
+export let prefix_cache: Record<string, string | null> = {}
+
 export const CREATE_SERVER_LISTING = "INSERT INTO prefixes (snowflake, prefix) VALUES ($1, $2)"
-export const ALTER_SERVER_LISTING = "ALTER TABLE prefixes SET prefix=$1 WHERE snowflake=$2";
+export const ALTER_SERVER_LISTING = "UPDATE prefixes SET prefix=$1 WHERE snowflake=$2";
+export const DELETE_SERVER_LISTING = "DELETE FROM prefixes WHERE snowflake=$1";
 export const GET_SERVER_LISTING = "SELECT (prefix) FROM prefixes WHERE snowflake=$1";
 
 export enum NoLocalPrefixEntryReason {
@@ -32,13 +35,29 @@ export async function get_prefix_entry(server: Guild, query_device: Pool | PoolC
     if (is_string(server.id) === false) {
         return NoLocalPrefixEntryReason.InvalidGuildArgument
     }
-    const prefixes = await query_device.query(GET_SERVER_LISTING, [server.id])
-    // No entry for the server ID
-    if (prefixes.rowCount === 0) {
+    // If we have a cached prefix for it, use that
+    if (is_string(prefix_cache[server.id])) {
+        return prefix_cache[server.id];
+    }
+    else if (prefix_cache[server.id] === null) {
         return NoLocalPrefixEntryReason.NoDatabaseEntry
     }
+    // Otherwise, get it and update the cache
     else {
-        return prefixes.rows[0];
+        // log(`get_prefix_entry: executing GET_SERVER_LISTING query...`)
+        const prefixes = await query_device.query(GET_SERVER_LISTING, [server.id])
+        // No entry for the server ID
+        if (prefixes.rowCount === 0) {
+            // Update the cache
+            prefix_cache[server.id] = null;
+            return NoLocalPrefixEntryReason.NoDatabaseEntry
+        }
+        // Entry case
+        else {
+            // Update the cache
+            prefix_cache[server.id] = prefixes.rows[0].prefix
+            return prefix_cache[server.id];
+        }
     }
 }
 
@@ -81,7 +100,8 @@ export async function  get_prefix(server: Guild, query_device: Pool | PoolClient
         return GLOBAL_PREFIX;
     }
     else if (is_string(local_prefix) === false) {
-        log(`Unexpected get_prefix error: Invalid return type '${typeof local_prefix}' (expected string or NoLocalPrefixEntryReason). Returning global prefix anyway...`, LogType.Mismatch)
+        log(`Unexpected get_prefix error: Invalid return type "${typeof local_prefix}" (expected string or NoLocalPrefixEntryReason). Returning global prefix anyway...`, LogType.Mismatch)
+        return GLOBAL_PREFIX;
     }
     else {
         return local_prefix;
@@ -122,12 +142,6 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
             did_succeed: false
         }
     }
-    else if (prefix === GLOBAL_PREFIX) {
-        return {
-            result: SetPrefixNonStringResult.LocalPrefixArgumentSameAsGlobalPrefix,
-            did_succeed: true
-        }
-    }
     else if (is_string(prefix) === false) {
         return {
             result: SetPrefixNonStringResult.InvalidPrefixArgument,
@@ -155,10 +169,21 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
 
     const local_prefix_entry = await get_prefix_entry(server, pool_client)
 
-    // Create a new row; we don't already have one for this server
-    if (local_prefix_entry === NoLocalPrefixEntryReason.NoDatabaseEntry) {
+    // If this server has no special prefix entry and the user wants to set prefix the same as GLOBAL_PREFIX, there's no reason to.
+    if (prefix === GLOBAL_PREFIX && local_prefix_entry === NoLocalPrefixEntryReason.NoDatabaseEntry) {
+        return {
+            result: SetPrefixNonStringResult.LocalPrefixArgumentSameAsGlobalPrefix,
+            did_succeed: true
+        }
+    }
+
+    // Create a new row; we don't already have one for this server.
+    if (local_prefix_entry === NoLocalPrefixEntryReason.NoDatabaseEntry && prefix !== GLOBAL_PREFIX) {
         try {
+            // log(`set_prefix: executing CREATE_SERVER_LISTING query...`)
             await pool.query(CREATE_SERVER_LISTING, [server.id, prefix]);
+            // Update prefix cache
+            prefix_cache[server.id] = prefix;
         }
         catch (err) {
             log(`Unexpected database error: set_prefix failed when creating new row {'snowflake': ${server.id}, 'prefix': ${prefix}}. Message:`, LogType.Error)
@@ -187,12 +212,15 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
             did_succeed: false
         }
     }
-    else if (is_string(local_prefix_entry)) {
+    else if (is_string(local_prefix_entry) && prefix !== GLOBAL_PREFIX) {
         try {
+            // log(`set_prefix: executing ALTER_SERVER_LISTING query...`)
             await pool.query(ALTER_SERVER_LISTING, [prefix, server.id])
+            // Update prefix cache
+            prefix_cache[server.id] = prefix;
         }
         catch (err) {
-            log(`Unexpected database error: set_prefix failed when altering row {'snowflake': ${server.id}, 'prefix': ${prefix}}. Message:`, LogType.Error)
+            log(`Unexpected database error: set_prefix failed when altering row to {'snowflake': ${server.id}, 'prefix': ${prefix}}. Message:`, LogType.Error)
             log(err, LogType.Error)
 
             conditionally_release_pool_client()
@@ -210,5 +238,33 @@ export const set_prefix = async function(server: Guild, pool: Pool, prefix: stri
             did_succeed: true
         }
 
+    }
+    // The client is trying to go back from a local prefix to the global prefix
+    else if (is_string(local_prefix_entry) && prefix === GLOBAL_PREFIX) {
+        // Delete the entry, making the server use the global prefix as wished
+        try {
+            // log(`set_prefix: executing DELETE_SERVER_LISTING query...`)
+            await pool.query(DELETE_SERVER_LISTING, [server.id])
+            // Update prefix cache
+            prefix_cache[server.id] = null;
+        }
+        catch (err) {
+            log(`Unexpected database error: set_prefix failed when deleting row {'snowflake': ${server.id}, 'prefix': ${local_prefix_entry}}. Message:`, LogType.Error)
+            log(err, LogType.Error)
+
+            conditionally_release_pool_client()
+
+            return {
+                result: SetPrefixNonStringResult.DatabaseOperationFailed,
+                did_succeed: false
+            }
+        }
+
+        conditionally_release_pool_client()
+
+        return {
+            result: local_prefix_entry,
+            did_succeed: true
+        }
     }
 }
