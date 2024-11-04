@@ -1,13 +1,16 @@
 import { BinaryLike, createHash } from "node:crypto";
-import { log, LogType } from "../../../utilities/log";
+import { log, LogType } from "../../../../utilities/log";
 import {
     ParamValueType,
     PartialSpecification,
     require_properties,
     Specification,
-} from "../../../utilities/runtime_typeguard";
-import { is_valid_Snowflake, Snowflake } from "../../../utilities/permissions";
-import { is_number, is_string } from "../../../utilities/typeutils";
+} from "../../../../utilities/runtime_typeguard";
+import {
+    is_valid_Snowflake,
+    Snowflake,
+} from "../../../../utilities/permissions";
+import { is_number, is_string } from "../../../../utilities/typeutils";
 
 export enum Kingdom {
     Cap = 0,
@@ -49,7 +52,20 @@ export const KINGDOM_NAMES = [
     "Dark Side",
     "Darker Side",
     "Mushroom Kingdom",
-];
+] as const;
+
+export type Lowercased<List extends readonly string[]> = {
+    [Key in keyof List]: Lowercase<List[Key] & string>;
+};
+
+export const KINGDOM_NAMES_LOWERCASE = KINGDOM_NAMES.map(name =>
+    name.toLowerCase(),
+) as unknown as Lowercased<typeof KINGDOM_NAMES>;
+
+export const KingdomNameToKingdom = (str: string): Kingdom | null => {
+    const index = KINGDOM_NAMES_LOWERCASE.indexOf(str.toLowerCase() as any);
+    return index === -1 ? null : index;
+};
 
 export type JumproleHandle = number | [string, Snowflake];
 
@@ -194,7 +210,7 @@ export const PGJumproleSPECIFICATION: Specification<PGJumprole> = [
     { type: ParamValueType.DateAsUInt4Like, name: "updated_at" },
     { type: ParamValueType.Snowflake, name: "server" },
     { type: ParamValueType.String, name: "hash" },
-];
+] as const;
 
 export const JumproleSPECIFICATION: Specification<Jumprole> = [
     { type: ParamValueType.UInt4S, name: "id" },
@@ -236,7 +252,7 @@ export const JumproleSPECIFICATION: Specification<Jumprole> = [
     { type: ParamValueType.DateAsUInt4Like, name: "updated_at" },
     { type: ParamValueType.Snowflake, name: "server" },
     { type: ParamValueType.String, name: "hash" },
-];
+] as const;
 
 export const PartialJumproleSPECIFICATION: Specification<Partial<Jumprole>> =
     PartialSpecification(JumproleSPECIFICATION);

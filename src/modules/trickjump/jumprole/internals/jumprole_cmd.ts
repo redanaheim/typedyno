@@ -3,15 +3,15 @@ import { Pool } from "pg";
 import {
     BotCommandProcessResults,
     BotCommandProcessResultType,
-} from "../../../functions";
+} from "../../../../functions";
 import {
-    GetArgsResult,
     get_first_matching_subcommand,
     handle_GetArgsResult,
-} from "../../../utilities/argument_processing/syntax_string";
-import { jumprole_set, manual as jumprole_set_manual } from "./set";
-import { jumprole_update, manual as jumprole_update_manual } from "./update";
-import { jumprole_remove, manual as jumprole_remove_manual } from "./remove";
+} from "../../../../utilities/argument_processing/arguments";
+import { jumprole_set, manual as jumprole_set_manual } from "../set";
+import { jumprole_update, manual as jumprole_update_manual } from "../update";
+import { jumprole_remove, manual as jumprole_remove_manual } from "../remove";
+import { GetArgsResult } from "../../../../utilities/argument_processing/arguments_types";
 
 export const jumprole_cmd = {
     command_manual: {
@@ -65,6 +65,7 @@ export const jumprole_cmd = {
             case "set": {
                 return jumprole_set(
                     result[1] as GetArgsResult<typeof set_manual.arguments>,
+                    message,
                     _client,
                     pool,
                     prefix,
@@ -73,6 +74,7 @@ export const jumprole_cmd = {
             case "update": {
                 return jumprole_update(
                     result[1] as GetArgsResult<typeof update_manual.arguments>,
+                    message,
                     _client,
                     pool,
                     prefix,
@@ -81,6 +83,7 @@ export const jumprole_cmd = {
             case "remove": {
                 return jumprole_remove(
                     result[1] as GetArgsResult<typeof remove_manual.arguments>,
+                    message,
                     _client,
                     pool,
                     prefix,

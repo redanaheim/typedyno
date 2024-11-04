@@ -26,6 +26,15 @@ import {
 } from "./utilities/typeutils";
 import { url } from "./integrations/paste_ee";
 
+export const GiveCheck = async (message: Message): Promise<boolean> => {
+    try {
+        await message.react("✅");
+        return true;
+    } catch (err) {
+        return false;
+    }
+};
+
 export enum BotCommandProcessResultType {
     DidNotSucceed,
     Succeeded,
@@ -37,15 +46,6 @@ export interface BotCommandProcessResults {
     type: BotCommandProcessResultType;
     not_authorized_message?: string;
 }
-
-export const confirm = async function (message: Message): Promise<boolean> {
-    try {
-        await message.react("✅");
-        return true;
-    } catch (err) {
-        return false;
-    }
-};
 
 export type BotCommandProcess =
     | ((
@@ -437,7 +437,7 @@ export const STOCK_BOT_COMMANDS: BotCommand[] = [
                                 );
 
                                 if (result.did_succeed) {
-                                    const confirmed = await confirm(message);
+                                    const confirmed = await GiveCheck(message);
                                     if (confirmed === true) {
                                         return {
                                             type: BotCommandProcessResultType.Succeeded,

@@ -4,6 +4,10 @@ import { CreatePasteResult, create_paste } from "./integrations/paste_ee";
 import { GLOBAL_PREFIX, MODULES } from "./main";
 import { log, LogType } from "./utilities/log";
 import { allowed } from "./utilities/permissions";
+import {
+    is_ParamValueType,
+    ParamValueType,
+} from "./utilities/runtime_typeguard";
 import { escape_reg_exp, is_string } from "./utilities/typeutils";
 
 /**
@@ -16,6 +20,8 @@ export interface CommandArgument {
     readonly id: string;
     // Whether the argument can be left out
     readonly optional: boolean;
+    // For auto-generating constraint
+    readonly further_constraint?: ParamValueType;
 }
 
 const is_valid_CommandArgument = function (
@@ -26,6 +32,11 @@ const is_valid_CommandArgument = function (
     } else if (is_string(thing.name) === false || is_string(thing.id)) {
         return false;
     } else if (thing.optional !== true && thing.optional !== false) {
+        return false;
+    } else if (
+        thing.further_constraint !== undefined &&
+        is_ParamValueType(thing.further_constraint) === false
+    ) {
         return false;
     } else {
         return true;
