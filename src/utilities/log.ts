@@ -1,5 +1,3 @@
-import * as Chalk from "chalk";
-
 export const enum LogType {
     None = "None",
     Status = "Status",
@@ -27,31 +25,31 @@ export const enum DebugLogType {
 export const chalkify = function (message: string, color: LogType): string {
     switch (color) {
         case LogType.Error:
-            return Chalk.red(message);
+            return message; //Chalk.red(message);
             break;
         case LogType.Success:
-            return Chalk.green(message);
+            return message; //Chalk.green(message);
             break;
         case LogType.System:
-            return Chalk.blue(message);
+            return message; //Chalk.blue(message);
             break;
         case LogType.Mismatch:
-            return Chalk.magenta(message);
+            return message; //Chalk.magenta(message);
             break;
         case LogType.None:
-            return message;
+            return message; //message;
             break;
         case LogType.Status:
-            return Chalk.yellow(message);
+            return message; //Chalk.yellow(message);
             break;
         case LogType.Incompatibility:
-            return Chalk.gray(message);
+            return message; //Chalk.gray(message);
             break;
         case LogType.FixedError:
-            return Chalk.cyan(message);
+            return message; //Chalk.cyan(message);
             break;
         case LogType.PromiseRejection:
-            return Chalk.redBright(message);
+            return message; //Chalk.redBright(message);
             break;
     }
 };
