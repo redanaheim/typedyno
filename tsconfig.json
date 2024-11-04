@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "noImplicitAny": true,
+        "removeComments": true,
+        "sourceMap": true,
+        "preserveConstEnums": true,
+        "outDir": "out",
+        "alwaysStrict": true
+    },
+    "include": [
+        "src/**/*"
+    ],
+}
