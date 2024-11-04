@@ -51,3 +51,7 @@ export const is_server = function(guild?: Guild): boolean {
     }
     return true;
 }
+
+export const escape_reg_exp = function(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
