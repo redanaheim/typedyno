@@ -11,11 +11,11 @@ import { escape_reg_exp, is_string } from "./utilities/typeutils";
  */
 export interface CommandArgument {
     // Concise description of the argument's purpose
-    name: string;
+    readonly name: string;
     // One-word argument name, for internal use
-    id: string;
+    readonly id: string;
     // Whether the argument can be left out
-    optional: boolean;
+    readonly optional: boolean;
 }
 
 const is_valid_CommandArgument = function (
@@ -37,15 +37,15 @@ const is_valid_CommandArgument = function (
  */
 export interface SubcommandManual {
     // Name of subcommand, i.e. list in %tj list
-    name: string;
+    readonly name: string;
     // Syntax string
     // Example: <prefix>proof set | $1 | $2
     // Example with optional: <prefix>proof get{opt $2}[ |] $1{opt $2}[ | $2]
     // In the example with the optional, the pipelines are only required if argument $2 is present.
-    syntax: string;
-    arguments: CommandArgument[];
+    readonly syntax: string;
+    readonly arguments: readonly CommandArgument[];
     // A description of the subcommand to be added on in the manual.
-    description: string;
+    readonly description: string;
 }
 
 /**
@@ -87,10 +87,10 @@ const is_valid_SubcommandManual = is_valid_SimpleCommandManual;
 
 export interface MultifacetedCommandManual {
     // Name of command, i.e. tj in %tj list
-    name: string;
-    subcommands: SubcommandManual[];
+    readonly name: string;
+    readonly subcommands: readonly SubcommandManual[];
     // A description of the command to be added on in the manual.
-    description: string;
+    readonly description: string;
 }
 
 const is_valid_MultifacetedCommandManual = function (
@@ -208,7 +208,7 @@ export const key_off = function (
  * @returns A list of syntax strings consisting of every possible combination of providing or not providing each optional argument
  */
 export const generate_syntaxes = function (
-    command_arguments: CommandArgument[],
+    command_arguments: readonly CommandArgument[],
     syntax_string: string,
     prefix_substitution: string,
 ): string[] {

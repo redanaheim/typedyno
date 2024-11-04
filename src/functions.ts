@@ -62,12 +62,12 @@ export type BotCommandProcess =
 export interface BotCommand {
     // Optional more specific permissions. If a module is unavailable, this command will be too,
     // however these permissions can further restrict certain commands.
-    permissions?: Permissions;
+    readonly permissions?: Permissions;
     // The command manual object which will be added to %commands results when the module (if it's part of a module) is available.
-    command_manual: CommandManual;
-    hide_when_contradicts_permissions: boolean;
+    readonly command_manual: CommandManual;
+    readonly hide_when_contradicts_permissions: boolean;
     // Command should return whether the command succeeded or not
-    process: BotCommandProcess;
+    readonly process: BotCommandProcess;
 }
 
 export const is_valid_BotCommand = function (thing: any): thing is BotCommand {
